@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bibliothèque – Scanner ISBN (caméra arrière)</title>
-  <!-- QuaggaJS (version stable) -->
+  <title>Bibliothèque – Scanner ISBN</title>
+  <!-- QuaggaJS (stable, pas de 404) -->
   <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
   <style>
     body {
@@ -24,13 +24,12 @@
       border: 3px solid #2c3e50;
       border-radius: 8px;
       background: #000;
-      outline: 2px solid #27ae60;  /* pour voir que la vidéo est active */
+      outline: 3px solid #27ae60; /* ✅ tu vois que la vidéo existe */
     }
     #result {
       margin: 10px 0;
       font-size: 16px;
       color: #333;
-      min-height: 20px;
     }
     button {
       margin-top: 10px;
@@ -51,7 +50,7 @@
   <div id="container">
     <h2>Scanner d’ISBN</h2>
     <video id="scanner" autoplay muted playsinline></video>
-    <div id="result">Caméra arrière en cours… (max 10 s)</div>
+    <div id="result">En attente de la caméra arrière…</div>
     <button id="stop" disabled>Arrêter</button>
   </div>
 
@@ -62,12 +61,12 @@
     let timeoutId    = null;
     let scanned      = false;
 
-    // 🔍 Dessine le contour du code barre
+    // 🔍 Affiche un rectangle rouge autour du code barre
     Quagga.onProcessed(function (result) {
-      if (result && result.boxes) {
-        var ctx = Quagga.canvas.ctx.overlay;
-        var canvas = Quagga.canvas.dom.overlay;
+      var ctx = Quagga.canvas.ctx.overlay;
+      var canvas = Quagga.canvas.dom.overlay;
 
+      if (result && result.boxes) {
         result.boxes.forEach(function (box) {
           Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, ctx, {
             color: "red",
@@ -86,9 +85,9 @@
           inputStream: {
             name: "Live",
             type: "LiveStream",
-            target: video,
+            target: video,           // <video> comme cible
             constraints: {
-              facingMode: "environment"  // 🎯 caméra arrière uniquement
+              facingMode: "environment"  // 🔥 caméra arrière exclusivement
             }
           },
           decoder: {
@@ -98,25 +97,25 @@
         function (err) {
           if (err) {
             console.error("Quagga.init ERROR:", err);
-            resultEl.textContent = "Erreur caméra (console).";
+            resultEl.textContent = "❌ Erreur caméra (console).";
             return;
           }
 
-          console.log("Quagga prêt");
+          console.log("Quagga prêt, démarrage…");
           Quagga.start();
-          resultEl.textContent = "Pointez un ISBN…";
+          resultEl.textContent = "📸 Pointez un ISBN…";
 
-          // ⏱ Timeout 10s
+          // ⏱ Timeout 10s max
           timeoutId = setTimeout(() => {
             if (!scanned) {
-              resultEl.textContent = "Aucun code trouvé (ou caméra pas prête).";
+              resultEl.textContent = "⚠️ Aucun code trouvé (caméra peut être trop sombre).";
               Quagga.stop();
               stopBtn.disabled = true;
             }
           }, 10000);
 
           stopBtn.onclick = () => {
-            resultEl.textContent = "Scan arrêté.";
+            resultEl.textContent = "🛑 Scan arrêté.";
             Quagga.stop();
             clearTimeout(timeoutId);
             stopBtn.disabled = true;
@@ -126,7 +125,7 @@
             if (!scanned) {
               scanned = true;
               const isbn = data.codeResult.code;
-              resultEl.textContent = `📚 ISBN lu : ${isbn}`;
+              resultEl.textContent = `✅ ISBN lu : ${isbn}`;
               console.log("ISBN:", isbn);
 
               // 🔗 Redirige vers ta bibliothèque GitHub Pages
@@ -143,14 +142,14 @@
       );
     }
 
-    // Démarrer au clic ou au chargement
+    // Démarrer au clic ou au premier touch
     document.addEventListener("click", () => {
       if (!Quagga.isRunning() && !scanned) {
         startScan();
       }
     });
 
-    // 🚀 Démarrer immédiatement (supprime si tu veux un bouton manuel)
+    // 💡 Démarrer directement (si tu veux)
     startScan();
   </script>
 </body>
