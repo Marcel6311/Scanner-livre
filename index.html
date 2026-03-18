@@ -1,35 +1,142 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Test caméra arrière</title>
+  <title>Bibliothèque – Scanner ISBN</title>
+  <!-- QuaggaJS (stable, pas de 404) -->
+  <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f8f8f8;
+    }
+    #container {
+      max-width: 400px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      border: 3px solid #2c3e50;
+      border-radius: 8px;
+      background: #000;
+    }
+    #result {
+      margin: 10px 0;
+      font-size: 16px;
+      color: #333;
+      min-height: 20px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #95a5a6;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
-  <video id="scanner" autoplay muted playsinline style="width:100%; height:240px; border:2px solid #ccc;"></video>
-  <div id="status"></div>
+  <div id="container">
+    <h2>Scanner ISBN</h2>
+    <video id="scanner" autoplay muted playsinline></video>
+    <p id="result">Caméra arrière en cours… (max 10 s)</p>
+    <button id="stop" disabled>Arrêter</button>
+  </div>
 
   <script>
-    const video = document.getElementById("scanner");
-    const status = document.getElementById("status");
+    const video      = document.getElementById("scanner");
+    const resultEl   = document.getElementById("result");
+    const stopBtn    = document.getElementById("stop");
+    let timeoutId    = null;
+    let scanned      = false;
 
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: "environment" 
-        } 
-      })
-        .then(function (stream) {
-          video.srcObject = stream;
-          status.textContent = "✅ Caméra arrière OK";
-        })
-        .catch(function (err) {
-          console.error("getUserMedia ERROR", err);
-          status.textContent = "❌ Erreur caméra : " + err.name;
-        });
-    } else {
-      status.textContent = "getUserMedia non supporté.";
+    function startScan() {
+      resultEl.textContent = "Initialisation…";
+      stopBtn.disabled = false;
+
+      Quagga.init(
+        {
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: video,
+            constraints: {
+              facingMode: "environment"  // 🔥 caméra arrière uniquement
+            }
+          },
+          decoder: {
+            readers: ["ean_reader", "code_128_reader"]  // ISBN / EAN13 / Code128
+          }
+        },
+        function (err) {
+          if (err) {
+            console.error("Quagga.init ERROR:", err);
+            resultEl.textContent = "Erreur caméra (console).";
+            return;
+          }
+
+          console.log("Quagga prêt");
+          Quagga.start();
+          resultEl.textContent = "Pointez un ISBN…";
+
+          // Timeout 10s max
+          timeoutId = setTimeout(() => {
+            if (!scanned) {
+              resultEl.textContent = "Aucun code trouvé (ou caméra pas prête).";
+              Quagga.stop();
+              stopBtn.disabled = true;
+            }
+          }, 10000);
+
+          stopBtn.onclick = () => {
+            resultEl.textContent = "Scan arrêté.";
+            Quagga.stop();
+            clearTimeout(timeoutId);
+            stopBtn.disabled = true;
+          };
+
+          Quagga.onDetected(function (data) {
+            if (!scanned) {
+              scanned = true;
+              const isbn = data.codeResult.code;
+              resultEl.textContent = `📚 ISBN lu : ${isbn}`;
+              console.log("ISBN:", isbn);
+
+              // 🔗 Redirige vers ta bibliothèque GitHub Pages
+              setTimeout(() => {
+                window.location.href = `https://ton-pseudo.github.io/mon-repo/?isbn=${isbn}`;
+              }, 1500);
+
+              Quagga.stop();
+              clearTimeout(timeoutId);
+              stopBtn.disabled = true;
+            }
+          });
+        }
+      );
     }
+
+    // Démarrer au clic ou au chargement
+    document.addEventListener("click", () => {
+      if (!Quagga.isRunning() && !scanned) {
+        startScan();
+      }
+    });
+
+    // 💡 Démarrer immédiatement (supprime ce bloc si tu préfères un bouton manuel)
+    startScan();
   </script>
 </body>
 </html>
