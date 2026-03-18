@@ -1,29 +1,30 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scanner ISBN (rapide)</title>
+  <title>Scanner ISBN (rapide, iOS)</title>
+  <!-- Quagga2 -->
   <script src="https://cdn.jsdelivr.net/npm/quagga2@latest/dist/quagga.min.js"></script>
 </head>
 <body>
-  <div id="scanner-container" style="width:100%; max-width:400px; margin:auto;">
-    <video id="scanner" autoplay muted playsinline style="width:100%;"></video>
+  <div style="width:100%; max-width:400px; margin:auto;">
+    <video id="scanner" autoplay muted playsinline style="width:100%; height:auto;border:2px solid #ccc;"></video>
   </div>
-  <pre id="result" style="text-align:center;">En attente (max 8 s)...</pre>
-
-  <button id="stop" style="margin-top:10px; display:none;">
-    Arrêter maintenant
-  </button>
+  <pre id="result" style="text-align:center;">En attente de la caméra...</pre>
+  <button id="stop" style="display:none;margin-top:10px;">Arrêter</button>
 
   <script>
     const video = document.getElementById("scanner");
     const resultEl = document.getElementById("result");
     const stopBtn = document.getElementById("stop");
     let timeoutId = null;
+    let scanned = false;
 
-    // Démarrer le scanner
     function startScan() {
+      resultEl.textContent = "Initialisation… (max 8 s)";
+
       Quagga.init(
         {
           inputStream: {
@@ -31,8 +32,8 @@
             type: "LiveStream",
             target: video,
             constraints: {
-              width: 1280,
-              height: 720,
+              width: { ideal: 1280 },
+              height: { ideal: 1080 },
               facingMode: "environment",
             },
           },
@@ -42,18 +43,19 @@
         },
         function (err) {
           if (err) {
-            console.error(err);
-            resultEl.textContent = "Erreur d'init.";
+            console.error("Quagga.init ERROR:", err);
+            resultEl.textContent = "Erreur caméra : voir console Safari.";
             return;
           }
-          Quagga.start();
-          // Drapeau pour éviter de loguer plusieurs fois
-          let scanned = false;
 
-          // Timer de 8 secondes max
+          console.log("Quagga prêt, démarrage…");
+          Quagga.start();
+          resultEl.textContent = "Appareil photo en cours de démarrage…";
+
+          // Timer 8 s max
           timeoutId = setTimeout(() => {
             if (!scanned) {
-              resultEl.textContent = "Aucun code détecté. Relancez.";
+              resultEl.textContent = "Aucun code détecté (ou caméra pas prête).";
               Quagga.stop();
               stopBtn.style.display = "none";
             }
@@ -61,23 +63,24 @@
 
           stopBtn.style.display = "block";
           stopBtn.onclick = () => {
-            resultEl.textContent = "Scan interrompu.";
+            resultEl.textContent = "Scan arrêté.";
             Quagga.stop();
             clearTimeout(timeoutId);
             stopBtn.style.display = "none";
           };
 
-          Quagga.onDetected((data) => {
+          Quagga.onDetected(function (data) {
             if (!scanned) {
               scanned = true;
               const isbn = data.codeResult.code;
               resultEl.textContent = `ISBN lu : ${isbn}`;
-              // Option 1 : renvoyer vers ta bibliothèque
+              console.log("ISBN:", isbn);
+
+              // Rediriger vers ta bibliothèque (GitHub Pages)
               setTimeout(() => {
                 window.location.href = `https://ton-pseudo.github.io/mon-repo/?isbn=${isbn}`;
               }, 1000);
-              // Option 2 : envoyer via API
-              // fetch("/api/add-book", { method: "POST", body: JSON.stringify({ isbn }) });
+
               Quagga.stop();
               clearTimeout(timeoutId);
               stopBtn.style.display = "none";
@@ -87,14 +90,14 @@
       );
     }
 
-    // Redémarrer le scan si besoin
+    // Démarrer au clic OU au chargement
     document.addEventListener("click", () => {
-      if (!Quagga.isRunning()) {
+      if (!Quagga.isRunning() && !scanned) {
         startScan();
       }
     });
 
-    // Démarrer au chargement
+    // Démarrer automatiquement au chargement
     startScan();
   </script>
 </body>
