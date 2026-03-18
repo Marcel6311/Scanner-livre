@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bibliothèque – Scanner ISBN</title>
-  <!-- QuaggaJS (stable, pas de 404) -->
+  <title>Scanner ISBN (simple et rapide)</title>
+  <!-- QuaggaJS (version stable) -->
   <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
   <style>
     body {
@@ -24,25 +24,12 @@
       border: 3px solid #2c3e50;
       border-radius: 8px;
       background: #000;
-      outline: 3px solid #27ae60; /* ✅ tu vois que la vidéo existe */
+      outline: 3px solid #27ae60; /* tu vois que la vidéo existe */
     }
     #result {
       margin: 10px 0;
       font-size: 16px;
       color: #333;
-    }
-    button {
-      margin-top: 10px;
-      padding: 10px 20px;
-      background: #3498db;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #95a5a6;
-      cursor: not-allowed;
     }
   </style>
 </head>
@@ -50,107 +37,75 @@
   <div id="container">
     <h2>Scanner d’ISBN</h2>
     <video id="scanner" autoplay muted playsinline></video>
-    <div id="result">En attente de la caméra arrière…</div>
-    <button id="stop" disabled>Arrêter</button>
+    <div id="result">En attente...</div>
   </div>
 
   <script>
     const video      = document.getElementById("scanner");
     const resultEl   = document.getElementById("result");
-    const stopBtn    = document.getElementById("stop");
-    let timeoutId    = null;
-    let scanned      = false;
 
-    // 🔍 Affiche un rectangle rouge autour du code barre
-    Quagga.onProcessed(function (result) {
-      var ctx = Quagga.canvas.ctx.overlay;
-      var canvas = Quagga.canvas.dom.overlay;
-
-      if (result && result.boxes) {
-        result.boxes.forEach(function (box) {
-          Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, ctx, {
-            color: "red",
-            lineWidth: 2
-          });
+    // 🔍 Fais d'abord marcher le flux vidéo (ton code actuel OK)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: "environment" 
+        } 
+      })
+        .then(function (stream) {
+          video.srcObject = stream;
+          resultEl.textContent = "📸 Caméra prêt. Place un ISBN dans le cadre.";
+        })
+        .catch(function (err) {
+          console.error("getUserMedia ERROR", err);
+          resultEl.textContent = "❌ Erreur caméra : " + err.name;
         });
-      }
-    });
-
-    function startScan() {
-      resultEl.textContent = "Initialisation…";
-      stopBtn.disabled = false;
-
-      Quagga.init(
-        {
-          inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: video,           // <video> comme cible
-            constraints: {
-              facingMode: "environment"  // 🔥 caméra arrière exclusivement
-            }
-          },
-          decoder: {
-            readers: ["ean_reader", "code_128_reader"]  // ISBN / EAN13 / Code128
-          }
-        },
-        function (err) {
-          if (err) {
-            console.error("Quagga.init ERROR:", err);
-            resultEl.textContent = "❌ Erreur caméra (console).";
-            return;
-          }
-
-          console.log("Quagga prêt, démarrage…");
-          Quagga.start();
-          resultEl.textContent = "📸 Pointez un ISBN…";
-
-          // ⏱ Timeout 10s max
-          timeoutId = setTimeout(() => {
-            if (!scanned) {
-              resultEl.textContent = "⚠️ Aucun code trouvé (caméra peut être trop sombre).";
-              Quagga.stop();
-              stopBtn.disabled = true;
-            }
-          }, 10000);
-
-          stopBtn.onclick = () => {
-            resultEl.textContent = "🛑 Scan arrêté.";
-            Quagga.stop();
-            clearTimeout(timeoutId);
-            stopBtn.disabled = true;
-          };
-
-          Quagga.onDetected(function (data) {
-            if (!scanned) {
-              scanned = true;
-              const isbn = data.codeResult.code;
-              resultEl.textContent = `✅ ISBN lu : ${isbn}`;
-              console.log("ISBN:", isbn);
-
-              // 🔗 Redirige vers ta bibliothèque GitHub Pages
-              setTimeout(() => {
-                window.location.href = `https://ton-pseudo.github.io/mon-repo/?isbn=${isbn}`;
-              }, 1500);
-
-              Quagga.stop();
-              clearTimeout(timeoutId);
-              stopBtn.disabled = true;
-            }
-          });
-        }
-      );
+    } else {
+      resultEl.textContent = "getUserMedia non supporté.";
     }
 
-    // Démarrer au clic ou au premier touch
-    document.addEventListener("click", () => {
-      if (!Quagga.isRunning() && !scanned) {
-        startScan();
-      }
-    });
+    // ⚡ Ensuite, lance Quagga
+    resultEl.textContent = "Init scanner...";
 
-    // 💡 Démarrer directement (si tu veux)
-    startScan();
+    Quagga.init(
+      {
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: video,           // la même <video>
+          constraints: {
+            facingMode: "environment"  // caméra arrière
+          }
+        },
+        decoder: {
+          readers: ["ean_reader", "code_128_reader"]  // ISBN / EAN13 / Code128
+        }
+      },
+      function (err) {
+        if (err) {
+          console.error("Quagga.init ERROR:", err);
+          resultEl.textContent = "❌ Erreur Quagga.";
+          return;
+        }
+
+        console.log("Quagga prêt");
+        Quagga.start();
+        resultEl.textContent = "🔍 Pointez un ISBN...";
+
+        // Quand un code est détecté
+        Quagga.onDetected(function (data) {
+          const isbn = data.codeResult.code;
+          resultEl.textContent = `✅ ISBN lu : ${isbn}`;
+          console.log("ISBN:", isbn);
+
+          // 🔗 Redirige vers ta bibliothèque GitHub Pages
+          setTimeout(() => {
+            window.location.href = `https://ton-pseudo.github.io/mon-repo/?isbn=${isbn}`;
+          }, 1500);
+
+          Quagga.stop();
+        });
+      }
+    );
   </script>
 </body>
 </html>
