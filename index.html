@@ -1,30 +1,30 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bibliothèque – Scanner ISBN</title>
-  <!-- QuaggaJS (stable, pas de 404) -->
+  <title>Bibliothèque – Scanner ISBN (caméra arrière)</title>
+  <!-- QuaggaJS (version stable) -->
   <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       padding: 20px;
-      background: #f8f8f8;
+      background: #f0f0f0;
     }
     #container {
       max-width: 400px;
       margin: 0 auto;
       text-align: center;
     }
-    video {
+    #scanner {
       width: 100%;
-      height: auto;
+      height: 240px;
       border: 3px solid #2c3e50;
       border-radius: 8px;
       background: #000;
+      outline: 2px solid #27ae60;  /* pour voir que la vidéo est active */
     }
     #result {
       margin: 10px 0;
@@ -49,9 +49,9 @@
 </head>
 <body>
   <div id="container">
-    <h2>Scanner ISBN</h2>
+    <h2>Scanner d’ISBN</h2>
     <video id="scanner" autoplay muted playsinline></video>
-    <p id="result">Caméra arrière en cours… (max 10 s)</p>
+    <div id="result">Caméra arrière en cours… (max 10 s)</div>
     <button id="stop" disabled>Arrêter</button>
   </div>
 
@@ -61,6 +61,21 @@
     const stopBtn    = document.getElementById("stop");
     let timeoutId    = null;
     let scanned      = false;
+
+    // 🔍 Dessine le contour du code barre
+    Quagga.onProcessed(function (result) {
+      if (result && result.boxes) {
+        var ctx = Quagga.canvas.ctx.overlay;
+        var canvas = Quagga.canvas.dom.overlay;
+
+        result.boxes.forEach(function (box) {
+          Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, ctx, {
+            color: "red",
+            lineWidth: 2
+          });
+        });
+      }
+    });
 
     function startScan() {
       resultEl.textContent = "Initialisation…";
@@ -73,7 +88,7 @@
             type: "LiveStream",
             target: video,
             constraints: {
-              facingMode: "environment"  // 🔥 caméra arrière uniquement
+              facingMode: "environment"  // 🎯 caméra arrière uniquement
             }
           },
           decoder: {
@@ -91,7 +106,7 @@
           Quagga.start();
           resultEl.textContent = "Pointez un ISBN…";
 
-          // Timeout 10s max
+          // ⏱ Timeout 10s
           timeoutId = setTimeout(() => {
             if (!scanned) {
               resultEl.textContent = "Aucun code trouvé (ou caméra pas prête).";
@@ -135,7 +150,7 @@
       }
     });
 
-    // 💡 Démarrer immédiatement (supprime ce bloc si tu préfères un bouton manuel)
+    // 🚀 Démarrer immédiatement (supprime si tu veux un bouton manuel)
     startScan();
   </script>
 </body>
