@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #131313;
+      --surface2: #1a1a1a;
+      --border: #242424;
+      --border2: #2e2e2e;
+      --accent: #00e87a;
+      --accent-glow: rgba(0, 232, 122, 0.18);
+      --amber: #ffb700;
+      --red: #ff3b3b;
+      --text: #f2f2f2;
+      --text2: #999;
+      --text3: #555;
+      --mono: 'IBM Plex Mono', monospace;
+      --ui: 'Barlow Condensed', sans-serif;
+      --circumference: 150.796px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ui);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .hd {
+      flex-shrink: 0;
+      padding: env(safe-area-inset-top, 12px) 18px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .hd-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .hd-title { font-size: 24px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; line-height: 1; }
+    .hd-sub { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--text3); margin-top: 2px; }
+
+    /* ─── ISBN BANNER (permanent) ───────────────────────── */
+    .isbn-bar {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .isbn-tag {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .16em;
+      color: var(--text3);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .isbn-led {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text3);
+      flex-shrink: 0;
+      transition: background .3s, box-shadow .3s;
+    }
+    .isbn-led.on { background: var(--accent); box-shadow: 0 0 7px var(--accent); animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .isbn-val {
+      font-family: var(--mono);
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--accent);
+      flex: 1;
+      transition: color .3s;
+    }
+    .isbn-val.empty { color: var(--border2); }
+
+    /* ─── SCROLLABLE BODY ───────────────────────────────── */
+    .body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── VIEWPORT ──────────────────────────────────────── */
+    #vwrap {
+      display: none;
+      position: relative;
+      width: 100%;
+      background: #000;
+      flex-shrink: 0;
+    }
+    #viewport { width: 100%; position: relative; }
+    #viewport video { width: 100%; display: block; max-height: 42vh; object-fit: cover; }
+    #viewport canvas.drawingBuffer { display: none !important; }
+
+    /* overlay */
+    .ov { position: absolute; inset: 0; pointer-events: none; }
+    .corner {
+      position: absolute; width: 22px; height: 22px;
+      border-color: var(--accent); border-style: solid;
+    }
+    .c-tl { top: 15%; left: 8%; border-width: 2px 0 0 2px; }
+    .c-tr { top: 15%; right: 8%; border-width: 2px 2px 0 0; }
+    .c-bl { bottom: 15%; left: 8%; border-width: 0 0 2px 2px; }
+    .c-br { bottom: 15%; right: 8%; border-width: 0 2px 2px 0; }
+    .scan-beam {
+      position: absolute; left: 8%; right: 8%; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--accent) 40%, var(--accent) 60%, transparent 100%);
+      box-shadow: 0 0 10px var(--accent), 0 0 20px var(--accent-glow);
+      animation: beam 2s ease-in-out infinite;
+      top: 20%;
+    }
+    @keyframes beam { 0%,100%{top:20%} 50%{top:80%} }
+    .scan-beam.paused { animation-play-state: paused; }
+
+    /* timer ring */
+    .timer-wrap {
+      position: absolute; top: 10px; right: 10px;
+      width: 54px; height: 54px;
+    }
+    .timer-wrap svg { transform: rotate(-90deg); }
+    .t-track { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 3; }
+    .t-prog {
+      fill: none; stroke: var(--accent); stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 150.796;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 1s linear, stroke .3s;
+    }
+    .t-num {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 17px; font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ─── IDLE ILLUSTRATION ─────────────────────────────── */
+    #idle {
+      padding: 36px 20px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      opacity: .45;
+    }
+    .idle-txt { font-size: 12px; letter-spacing: .1em; color: var(--text3); }
+
+    /* ─── CONTROLS ──────────────────────────────────────── */
+    .ctrl {
+      flex-shrink: 0;
+      padding: 14px 16px;
+      display: flex; gap: 10px;
+    }
+    .btn {
+      border: none; cursor: pointer;
+      font-family: var(--ui); font-weight: 700; font-size: 16px;
+      letter-spacing: .07em; text-transform: uppercase;
+      border-radius: 12px; padding: 16px 20px;
+      transition: transform .15s, opacity .15s;
+    }
+    .btn:active { transform: scale(.96); opacity: .85; }
+    .btn-primary { flex: 1; background: var(--accent); color: #000; }
+    .btn-cancel {
+      background: var(--red); color: #fff;
+      display: none;
+    }
+
+    .status {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 4px 20px 14px;
+      font-size: 13px; letter-spacing: .05em;
+      min-height: 32px;
+    }
+    .status.scanning { color: var(--accent); }
+    .status.timeout  { color: var(--amber); }
+    .status.muted    { color: var(--text3); }
+
+    /* ─── LOADER ────────────────────────────────────────── */
+    #loader {
+      display: none;
+      padding: 28px; text-align: center;
+      flex-direction: column; align-items: center; gap: 14px;
+    }
+    .spinner {
+      width: 38px; height: 38px;
+      border: 3px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-txt { font-size: 12px; letter-spacing: .1em; color: var(--text3); }
+    .src-pills {
+      display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+      margin-top: 4px;
+    }
+    .src-pill {
+      font-size: 10px; letter-spacing: .08em; font-family: var(--mono);
+      padding: 3px 9px; border-radius: 20px;
+      border: 1px solid var(--border2); color: var(--text3);
+      transition: border-color .3s, color .3s;
+    }
+    .src-pill.active  { border-color: var(--accent); color: var(--accent); }
+    .src-pill.done    { border-color: var(--border2); color: var(--text3); opacity: .5; }
+    .src-pill.found   { border-color: var(--accent); color: var(--accent); opacity: .7; }
+
+    /* ─── RESULT CARD ───────────────────────────────────── */
+    #result {
+      display: none;
+      margin: 4px 14px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+    }
+    .r-top {
+      display: flex; gap: 14px; padding: 16px 16px 14px;
+      align-items: flex-start;
+    }
+    .r-cover-wrap {
+      flex-shrink: 0; width: 96px; height: 140px;
+      border-radius: 7px; overflow: hidden;
+      background: var(--surface2); border: 1px solid var(--border2);
+      box-shadow: 4px 6px 16px rgba(0,0,0,.6);
+    }
+    .r-cover { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+    .r-cover-ph { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; }
+    .r-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .r-title { font-size: 17px; font-weight: 700; line-height: 1.25; color: var(--text); }
+    .r-author { font-size: 13px; color: var(--accent); font-weight: 600; }
+    .r-meta   { font-size: 10px; font-family: var(--mono); color: var(--text3); }
+    .r-src {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text3); background: var(--surface2);
+      padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+    .r-src-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+    .r-div { height: 1px; background: var(--border); margin: 0 16px; }
+    /* Résumé — la page défile naturellement, pas de scroll imbriqué */
+    .r-summary-wrap { padding: 14px 16px 4px; }
+    .r-summary-label {
+      font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text3); margin-bottom: 8px; font-family: var(--mono);
+    }
+    .r-summary { font-size: 13px; line-height: 1.75; color: #ccc; }
+    .r-actions { padding: 14px; }
+    .btn-again {
+      width: 100%; padding: 14px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border2); border-radius: 10px;
+      font-family: var(--ui); font-size: 15px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: transform .15s;
+    }
+    .btn-again:active { transform: scale(.96); }
+
+    /* ─── ERROR ──────────────────────────────────────────── */
+    #errcard {
+      display: none;
+      margin: 4px 14px 14px;
+      background: rgba(255,59,59,.08);
+      border: 1px solid rgba(255,59,59,.25);
+      border-radius: 14px;
+      padding: 22px 20px;
+      text-align: center;
+    }
+    .err-icon { font-size: 28px; margin-bottom: 10px; }
+    .err-txt { font-size: 14px; color: #ff8888; line-height: 1.5; margin-bottom: 16px; }
+    .btn-retry {
+      padding: 12px 28px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border2); border-radius: 10px;
+      font-family: var(--ui); font-size: 15px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    /* ─── TOAST ──────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 12px) + 20px);
+      left: 50%; transform: translateX(-50%) translateY(70px);
+      background: var(--accent); color: #000;
+      padding: 11px 22px; border-radius: 100px;
+      font-family: var(--ui); font-size: 14px; font-weight: 700;
+      letter-spacing: .05em;
+      transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+      z-index: 9999; white-space: nowrap; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── SAISIE MANUELLE ────────────────────────────────── */
+    .manual-wrap {
+      flex-shrink: 0;
+      margin: 0 14px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .manual-wrap label {
+      display: none; /* accessible mais invisible */
+    }
+    .manual-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 13px 14px;
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: .1em;
+      color: var(--text);
+      caret-color: var(--accent);
+      outline: none;
+      -webkit-appearance: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .manual-input::placeholder { color: var(--text3); letter-spacing: .06em; font-size: 14px; }
+    .manual-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .btn-search {
+      flex-shrink: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 13px 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, border-color .2s, transform .15s;
+      color: var(--text);
+    }
+    .btn-search:active { transform: scale(.93); }
+    .btn-search:hover  { background: var(--border); border-color: var(--accent); }
+    .manual-sep {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px 10px;
+    }
+    .sep-line { flex: 1; height: 1px; background: var(--border); }
+    .sep-txt  { font-size: 10px; letter-spacing: .12em; color: var(--text3); text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hd">
+  <div class="hd-icon">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4h2M4 8h2M4 12h2M4 16h2M4 20h2M8 4h1M8 8h1M8 12h1M8 16h1M8 20h1M11 4h2M14 4h2M17 4h3M11 8h6M20 8v2M11 12h2M14 12h3M20 12v8M14 16h6"/>
+    </svg>
+  </div>
+  <div>
+    <div class="hd-title">Scanner</div>
+    <div class="hd-sub">Livres · Produits alimentaires</div>
+  </div>
+</div>
+
+<!-- ISBN BANNER PERMANENT -->
+<div class="isbn-bar">
+  <span class="isbn-tag">ISBN</span>
+  <div class="isbn-led" id="led"></div>
+  <span class="isbn-val empty" id="isbnVal">— — — — — — — — — — — — —</span>
+</div>
+
+<!-- BODY -->
+<div class="body">
+
+  <!-- VIEWPORT -->
+  <div id="vwrap">
+    <div id="viewport"></div>
+    <div class="ov">
+      <div class="corner c-tl"></div>
+      <div class="corner c-tr"></div>
+      <div class="corner c-bl"></div>
+      <div class="corner c-br"></div>
+      <div class="scan-beam" id="beam"></div>
+      <div class="timer-wrap">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <circle class="t-track" cx="27" cy="27" r="24"/>
+          <circle class="t-prog" id="tprog" cx="27" cy="27" r="24"/>
+        </svg>
+        <div class="t-num" id="tnum">8</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IDLE -->
+  <div id="idle">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+      <rect x="8" y="16" width="56" height="40" rx="4" stroke="#444" stroke-width="1.5"/>
+      <line x1="19" y1="16" x2="19" y2="56" stroke="#444" stroke-width="4"/>
+      <line x1="27" y1="16" x2="27" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="33" y1="16" x2="33" y2="56" stroke="#333" stroke-width="3"/>
+      <line x1="40" y1="16" x2="40" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="46" y1="16" x2="46" y2="56" stroke="#444" stroke-width="2.5"/>
+      <line x1="52" y1="16" x2="52" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="8" y1="63" x2="64" y2="63" stroke="#00e87a" stroke-width="2" opacity=".45"/>
+    </svg>
+    <div class="idle-txt">Prêt à scanner</div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="ctrl">
+    <button class="btn btn-primary" id="btnStart" onclick="startScan()">📷 &nbsp;Scanner</button>
+    <button class="btn btn-cancel" id="btnCancel" onclick="cancelScan()">✕ &nbsp;Annuler</button>
+  </div>
+
+  <div class="status muted" id="status">Livre ou produit alimentaire</div>
+
+  <!-- SÉPARATEUR -->
+  <div class="manual-sep">
+    <div class="sep-line"></div>
+    <span class="sep-txt">ou saisie manuelle</span>
+    <div class="sep-line"></div>
+  </div>
+
+  <!-- SAISIE MANUELLE -->
+  <div class="manual-wrap">
+    <label for="manualISBN">ISBN manuel</label>
+    <input
+      class="manual-input"
+      id="manualISBN"
+      type="tel"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      placeholder="ex. 9782070360024"
+      maxlength="17"
+      autocomplete="off"
+      spellcheck="false"
+      onkeydown="if(event.key==='Enter') searchManual()"
+    >
+    <button class="btn-search" onclick="searchManual()" title="Rechercher">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+    </button>
+  </div>
+  <div id="loader">
+    <div class="spinner"></div>
+    <div class="loader-txt" id="loaderTxt">Recherche en cours…</div>
+    <div class="src-pills" id="pills-books">
+      <div class="src-pill" id="pill-google">Google Books</div>
+      <div class="src-pill" id="pill-open">Open Library</div>
+      <div class="src-pill" id="pill-inv">Inventaire.io</div>
+      <div class="src-pill" id="pill-bnf">BnF</div>
+    </div>
+    <div class="src-pills" id="pills-food" style="display:none">
+      <div class="src-pill" id="pill-off">Open Food Facts</div>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result">
+    <div class="r-top">
+      <!-- Couverture portrait -->
+      <div class="r-cover-wrap">
+        <img class="r-cover" id="rCover" src="" alt="Couverture"
+          onerror="this.style.display='none';document.getElementById('rCoverPh').style.display='flex';">
+        <div class="r-cover-ph" id="rCoverPh">
+          <svg width="32" height="32" fill="#333" viewBox="0 0 24 24">
+            <path d="M6 2h12a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm0 2v16h12V4H6zm2 2h8v2H8V6zm0 4h6v2H8v-2z"/>
+          </svg>
+        </div>
+      </div>
+      <!-- Infos -->
+      <div class="r-info">
+        <div class="r-title" id="rTitle"></div>
+        <div class="r-author" id="rAuthor"></div>
+        <div class="r-meta" id="rMeta"></div>
+        <div class="r-src" id="rSrc"><div class="r-src-dot"></div><span id="rSrcTxt"></span></div>
+      </div>
+    </div>
+    <div class="r-div"></div>
+    <!-- Résumé scrollable -->
+    <div class="r-summary-wrap">
+      <div class="r-summary-label">Résumé</div>
+      <div class="r-summary" id="rSummary"></div>
+    </div>
+    <!-- Nouveau scan -->
+    <div class="r-actions">
+      <button class="btn-again" onclick="resetScanner()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        Nouveau scan
+      </button>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="errcard">
+    <div class="err-icon">⚠️</div>
+    <div class="err-txt" id="errTxt"></div>
+    <button class="btn-retry" onclick="resetScanner()">Réessayer</button>
+  </div>
+
+</div><!-- /.body -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Quagga chargé à la demande -->
+<script>
+/* ─────────────────────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────────────────────── */
+const LIBRARY_URL   = 'https://marcel6311.github.io/Biblioth%C3%A8que/ma-bibliotheque.html';
+const SCAN_DURATION = 8; // secondes
+const CIRC          = 2 * Math.PI * 24; // ≈ 150.796
+
+/* ─── STATE ──────────────────────────────────────────── */
+let scanning      = false;
+let quaggaLive    = false;
+let scanTimer     = null;
+let tickInterval  = null;
+let currentISBN   = '';
+let currentBook   = null;
+let summaryOpen   = false;
+
+/* ─── TIMER UI ───────────────────────────────────────── */
+function startTimer() {
+  let s = SCAN_DURATION;
+  const prog = document.getElementById('tprog');
+  const num  = document.getElementById('tnum');
+  prog.style.stroke = 'var(--accent)';
+  prog.style.strokeDashoffset = '0';
+  num.textContent = s;
+
+  tickInterval = setInterval(() => {
+    s--;
+    num.textContent = s;
+    prog.style.strokeDashoffset = CIRC * (1 - s / SCAN_DURATION);
+    if (s <= 3) prog.style.stroke = 'var(--red)';
+    if (s <= 0) clearInterval(tickInterval);
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(tickInterval);
+  tickInterval = null;
+}
+
+/* ─── SCAN ───────────────────────────────────────────── */
+function loadQuagga(cb) {
+  if (window.Quagga) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js';
+  s.onload = cb;
+  s.onerror = () => { showError("Impossible de charger le scanner.\nVérifiez votre connexion."); };
+  document.head.appendChild(s);
+}
+
+function startScan() {
+  resetUI();
+  setStatus('Chargement du scanner…', 'scanning');
+
+  loadQuagga(() => {
+  scanning = true;
+
+  document.getElementById('vwrap').style.display    = 'block';
+  document.getElementById('idle').style.display     = 'none';
+  document.getElementById('btnStart').style.display = 'none';
+  document.getElementById('btnCancel').style.display = 'block';
+  document.getElementById('led').classList.add('on');
+  setStatus('Scan en cours… pointez vers le code-barres', 'scanning');
+  startTimer();
+
+  scanTimer = setTimeout(() => {
+    if (scanning && !currentISBN) {
+      stopScan();
+      setStatus('Aucun code-barres détecté — réessayez', 'timeout');
+      document.getElementById('idle').style.display = 'flex';
+      document.getElementById('btnStart').style.display = 'block';
+    }
+  }, SCAN_DURATION * 1000);
+
+  Quagga.init({
+    inputStream: {
+      type: 'LiveStream',
+      target: document.getElementById('viewport'),
+      constraints: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    },
+    locator: { patchSize: 'medium', halfSample: true },
+    numOfWorkers: 2,
+    frequency: 10,
+    decoder: { readers: ['ean_reader', 'ean_8_reader'] },
+    locate: true
+  }, err => {
+    if (err) {
+      stopScan();
+      showError("Impossible d'accéder à la caméra.\nVérifiez les autorisations dans Réglages > Safari.");
+      return;
+    }
+    quaggaLive = true;
+    Quagga.start();
+  });
+
+  Quagga.onDetected(onDetected);
+  }); // fin loadQuagga
+}
+
+function onDetected(result) {
+  if (!scanning) return;
+  const code = result.codeResult.code;
+  if (!code || code.length < 8) return;
+  stopScan();
+  setISBN(code);
+  // Livre = commence par 978 ou 979 ou ISBN-10 (10 chiffres)
+  // Tout autre EAN-13 ou EAN-8 = produit alimentaire
+  if (code.startsWith('978') || code.startsWith('979') || code.length === 10) {
+    fetchBook(code);
+  } else {
+    fetchFood(code);
+  }
+}
+
+/* ─── OPEN FOOD FACTS ────────────────────────────────── */
+async function fetchFood(barcode) {
+  setStatus('', '');
+  showLoader(true);
+  document.getElementById('pills-books').style.display = 'none';
+  document.getElementById('pills-food').style.display  = 'flex';
+  document.getElementById('loaderTxt').textContent     = 'Recherche Open Food Facts…';
+  document.getElementById('pill-off').className        = 'src-pill active';
+
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+    const d = await r.json();
+
+    document.getElementById('pill-off').className = 'src-pill ' + (d.status === 1 ? 'found' : 'done');
+    showLoader(false);
+
+    if (d.status !== 1 || !d.product) {
+      showError(`Produit non trouvé (${barcode}).\nEssayez sur world.openfoodfacts.org`);
+      return;
+    }
+
+    const p = d.product;
+    const name      = p.product_name_fr || p.product_name || p.abbreviated_product_name || 'Produit inconnu';
+    const brand     = p.brands || '';
+    const quantity  = p.quantity || '';
+    const nutriscore= p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : '';
+    const ecoscore  = p.ecoscore_grade  ? p.ecoscore_grade.toUpperCase()  : '';
+    const categories= p.categories_tags_fr || p.categories || '';
+    const ingredients = p.ingredients_text_fr || p.ingredients_text || '';
+    const cover     = p.image_front_url || p.image_url || '';
+
+    // Construire le "résumé" nutritionnel
+    let summary = '';
+    if (ingredients) summary += '🧪 Ingrédients :\n' + ingredients + '\n\n';
+    const n = p.nutriments || {};
+    const per = p.nutrition_data_per || '100g';
+    if (n['energy-kcal_100g'] || n['energy-kcal']) {
+      summary += `📊 Valeurs nutritionnelles (pour ${per}) :\n`;
+      if (n['energy-kcal_100g']) summary += `Énergie : ${n['energy-kcal_100g']} kcal\n`;
+      if (n['fat_100g'] !== undefined)           summary += `Lipides : ${n['fat_100g']} g\n`;
+      if (n['saturated-fat_100g'] !== undefined) summary += `  dont saturés : ${n['saturated-fat_100g']} g\n`;
+      if (n['carbohydrates_100g'] !== undefined) summary += `Glucides : ${n['carbohydrates_100g']} g\n`;
+      if (n['sugars_100g'] !== undefined)        summary += `  dont sucres : ${n['sugars_100g']} g\n`;
+      if (n['fiber_100g'] !== undefined)         summary += `Fibres : ${n['fiber_100g']} g\n`;
+      if (n['proteins_100g'] !== undefined)      summary += `Protéines : ${n['proteins_100g']} g\n`;
+      if (n['salt_100g'] !== undefined)          summary += `Sel : ${n['salt_100g']} g\n`;
+    }
+    if (p.labels) summary += `\n🏷 Labels : ${p.labels}`;
+
+    const badges = [nutriscore ? `Nutri-Score ${nutriscore}` : '', ecoscore ? `Éco-Score ${ecoscore}` : ''].filter(Boolean).join(' · ');
+
+    showResult({
+      title:     name,
+      author:    brand + (quantity ? ' · ' + quantity : ''),
+      publisher: categories.split(',')[0] || '',
+      year:      '',
+      pages:     '',
+      summary:   summary.trim(),
+      cover:     cover,
+      isbn:      barcode,
+      source:    'Open Food Facts',
+      sourceAll: ['Open Food Facts'],
+      meta2:     badges,  // nutri/eco score
+      isFood:    true
+    });
+
+  } catch(e) {
+    document.getElementById('pill-off').className = 'src-pill done';
+    showLoader(false);
+    showError('Erreur réseau — réessayez.');
+  }
+}
+
+function stopScan() {
+  scanning = false;
+  clearTimeout(scanTimer);
+  stopTimer();
+  document.getElementById('led').classList.remove('on');
+  document.getElementById('btnCancel').style.display = 'none';
+  document.getElementById('beam').classList.add('paused');
+  if (quaggaLive) {
+    try { Quagga.offDetected(onDetected); Quagga.stop(); } catch(e){}
+    quaggaLive = false;
+  }
+  setTimeout(() => { document.getElementById('vwrap').style.display = 'none'; }, 250);
+}
+
+function cancelScan() {
+  stopScan();
+  resetScanner();
+}
+
+/* ─── ISBN DISPLAY ───────────────────────────────────── */
+function setISBN(isbn) {
+  currentISBN = isbn;
+  const el = document.getElementById('isbnVal');
+  el.textContent = isbn;
+  el.classList.remove('empty');
+}
+
+function clearISBN() {
+  currentISBN = '';
+  const el = document.getElementById('isbnVal');
+  el.textContent = '— — — — — — — — — — — — —';
+  el.classList.add('empty');
+}
+
+/* ─── API PARALLÈLE — 3 SOURCES ─────────────────────── */
+
+/* Scoring : plus un résultat est complet, plus son score est élevé */
+function scoreBook(b) {
+  if (!b) return -1;
+  let s = 0;
+  if (b.title   && b.title   !== 'Titre inconnu')   s += 2;
+  if (b.author  && b.author  !== 'Auteur inconnu')  s += 2;
+  if (b.summary && b.summary.length > 40)           s += 4;
+  if (b.cover)                                       s += 3;
+  if (b.publisher)                                   s += 1;
+  if (b.year)                                        s += 1;
+  if (b.pages)                                       s += 1;
+  return s;
+}
+
+/* Fusionne le meilleur de plusieurs résultats */
+function mergeBooks(results) {
+  // Trier par score décroissant
+  const sorted = results
+    .filter(Boolean)
+    .sort((a, b) => scoreBook(b) - scoreBook(a));
+  if (!sorted.length) return null;
+
+  const best = { ...sorted[0] };
+
+  // Combler les trous avec les sources suivantes
+  for (const r of sorted.slice(1)) {
+    if (!best.summary && r.summary) best.summary = r.summary;
+    if (!best.cover   && r.cover)   best.cover   = r.cover;
+    if (!best.publisher && r.publisher) best.publisher = r.publisher;
+    if (!best.year    && r.year)    best.year    = r.year;
+    if (!best.pages   && r.pages)   best.pages   = r.pages;
+  }
+
+  // Indiquer toutes les sources ayant répondu
+  const sources = [...new Set(sorted.map(r => r.source))];
+  best.sourceAll = sources;
+  best.source    = sorted[0].source;
+
+  // Couverture garantie : URL Open Library directe par ISBN (CDN public, toujours dispo)
+  if (!best.cover && best.isbn) {
+    best.cover = 'https://covers.openlibrary.org/b/isbn/' + best.isbn + '-L.jpg';
+  }
+
+  return best;
+}
+
+/* Indicateur visuel par pill */
+function pillState(id, state) {
+  const el = document.getElementById('pill-' + id);
+  if (!el) return;
+  el.className = 'src-pill ' + state;
+}
+
+async function fetchBook(isbn) {
+  setStatus('', '');
+  showLoader(true);
+  document.getElementById('pills-books').style.display = 'flex';
+  document.getElementById('pills-food').style.display  = 'none';
+  document.getElementById('loaderTxt').textContent     = 'Consultation de 4 sources en parallèle…';
+
+  // Activer toutes les pills
+  pillState('google', 'active');
+  pillState('open',   'active');
+  pillState('inv',    'active');
+  pillState('bnf',    'active');
+
+  const results = await Promise.allSettled([
+    fetchGoogle(isbn).then(r => { pillState('google', r ? 'found' : 'done'); return r; })
+                     .catch(() => { pillState('google','done'); return null; }),
+    fetchOpenLib(isbn).then(r => { pillState('open', r ? 'found' : 'done'); return r; })
+                      .catch(() => { pillState('open','done'); return null; }),
+    fetchInventaire(isbn).then(r => { pillState('inv', r ? 'found' : 'done'); return r; })
+                         .catch(() => { pillState('inv','done'); return null; }),
+    fetchBnf(isbn).then(r => { pillState('bnf', r ? 'found' : 'done'); return r; })
+                  .catch(() => { pillState('bnf','done'); return null; })
+  ]);
+
+  const books   = results.map(r => r.status === 'fulfilled' ? r.value : null);
+  const merged  = mergeBooks(books.filter(Boolean));
+
+  showLoader(false);
+
+  if (merged) {
+    currentBook = merged;
+    showResult(merged);
+  } else {
+    showError(`Aucun livre trouvé pour l'ISBN ${isbn}.\nVérifiez que c'est bien un code-barres de livre (ISBN-13 ou ISBN-10).`);
+  }
+}
+
+/* ── Google Books ───────────────────────────────────── */
+async function fetchGoogle(isbn) {
+  const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (!d.items?.length) return null;
+  const v = d.items[0].volumeInfo;
+  return {
+    title:     v.title || 'Titre inconnu',
+    author:    (v.authors || ['Auteur inconnu']).join(', '),
+    publisher: v.publisher || '',
+    year:      v.publishedDate?.substring(0,4) || '',
+    pages:     v.pageCount || '',
+    lang:      v.language || '',
+    summary:   v.description || '',
+    cover:     (v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail || '').replace('http:','https:'),
+    isbn,
+    source: 'Google Books'
+  };
+}
+
+/* ── Open Library ───────────────────────────────────── */
+async function fetchOpenLib(isbn) {
+  const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const info = d[`ISBN:${isbn}`];
+  if (!info) return null;
+  const cover   = info.cover?.large || info.cover?.medium || info.cover?.small || '';
+  const summary = typeof info.notes === 'string' ? info.notes
+                : info.notes?.value || info.excerpts?.[0]?.text || '';
+  return {
+    title:     info.title || 'Titre inconnu',
+    author:    (info.authors||[]).map(a=>a.name).join(', ') || 'Auteur inconnu',
+    publisher: (info.publishers||[]).map(p=>p.name).join(', '),
+    year:      info.publish_date?.match(/\d{4}/)?.[0] || '',
+    pages:     info.number_of_pages || '',
+    lang:      '',
+    summary,
+    cover,
+    isbn,
+    source: 'Open Library'
+  };
+}
+
+/* ── Inventaire.io (excellent livres FR/CH) ─────────── */
+async function fetchInventaire(isbn) {
+  const r = await fetch(`https://inventaire.io/api/entities?action=by-uris&uris=isbn:${isbn}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const entity = d.entities?.[`isbn:${isbn}`];
+  if (!entity) return null;
+
+  /* Titre : préférer FR puis EN */
+  const labels = entity.labels || {};
+  const title  = labels.fr || labels.en || Object.values(labels)[0] || 'Titre inconnu';
+
+  /* Description */
+  const descs  = entity.descriptions || {};
+  const summary = descs.fr || descs.en || Object.values(descs)[0] || '';
+
+  /* Couverture */
+  const cover = entity.image?.url
+    ? (entity.image.url.startsWith('http') ? entity.image.url
+      : `https://inventaire.io${entity.image.url}`)
+    : '';
+
+  /* Claims Wikidata */
+  const claims = entity.claims || {};
+
+  /* Année : wdt:P577 (date de publication) */
+  let year = '';
+  const dateVal = claims['wdt:P577']?.[0];
+  if (dateVal) year = String(dateVal).substring(0,4);
+
+  /* Editeur : wdt:P123 — URIs Wikidata, on prend juste l'URI pour l'instant */
+  const pubUri  = claims['wdt:P123']?.[0] || '';
+
+  /* Pages : wdt:P1104 */
+  const pages = claims['wdt:P1104']?.[0] || '';
+
+  /* Auteurs : wdt:P50 → URIs, résolution en parallèle (max 2) */
+  const authorUris = (claims['wdt:P50'] || []).slice(0, 2);
+  let author = 'Auteur inconnu';
+  if (authorUris.length) {
+    try {
+      const urisParam = authorUris.join('|');
+      const ar = await fetch(`https://inventaire.io/api/entities?action=by-uris&uris=${encodeURIComponent(urisParam)}`);
+      if (ar.ok) {
+        const ad = await ar.json();
+        const names = authorUris.map(u => {
+          const e = ad.entities?.[u];
+          if (!e) return null;
+          const l = e.labels || {};
+          return l.fr || l.en || Object.values(l)[0] || null;
+        }).filter(Boolean);
+        if (names.length) author = names.join(', ');
+      }
+    } catch(e) { /* auteur restera inconnu */ }
+  }
+
+  if (!title || title === 'Titre inconnu') return null;
+
+  return { title, author, publisher: pubUri ? '—' : '', year, pages, lang: 'fr', summary, cover, isbn, source: 'Inventaire.io' };
+}
+
+/* ── BnF — Bibliothèque nationale de France ─────────── */
+async function fetchBnf(isbn) {
+  const url = `https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve`
+            + `&query=bib.isbn+adj+"${isbn}"&recordSchema=dublincore&maximumRecords=1`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const txt = await r.text();
+
+  /* Parser le XML Dublin Core retourné par la BnF */
+  const parser = new DOMParser();
+  const xml    = parser.parseFromString(txt, 'application/xml');
+
+  /* Vérifier qu'il y a au moins un record */
+  const records = xml.getElementsByTagNameNS('*', 'record');
+  if (!records.length) return null;
+
+  /* Helper : premier élément d'un tag DC */
+  const dc = (tag) => {
+    const els = xml.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag);
+    return els.length ? els[0].textContent.trim() : '';
+  };
+  /* Tous les éléments d'un tag DC */
+  const dcAll = (tag) => {
+    const els = xml.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag);
+    return Array.from(els).map(e => e.textContent.trim()).filter(Boolean);
+  };
+
+  const title = dc('title');
+  if (!title) return null;
+
+  /* Auteurs : dc:creator peut contenir "NOM, Prénom (1950-)" → nettoyer */
+  const creators = dcAll('creator').map(c => c.replace(/\s*\(\d{4}[-–]\d*\)\s*$/, '').trim());
+  const author   = creators.join(', ') || 'Auteur inconnu';
+
+  /* Éditeur : dc:publisher souvent "Ville : Éditeur" */
+  const pubRaw   = dc('publisher');
+  const publisher = pubRaw.includes(':') ? pubRaw.split(':').slice(1).join(':').trim() : pubRaw;
+
+  /* Année : dc:date */
+  const dateRaw = dc('date');
+  const year    = dateRaw.match(/\d{4}/)?.[0] || '';
+
+  /* Description / résumé */
+  const summary = dcAll('description').find(d => d.length > 30) || '';
+
+  /* Langue */
+  const lang = dc('language') || 'fr';
+
+  /* Pas de couverture via SRU, mais on peut tenter BnF Gallica */
+  /* Format : https://gallica.bnf.fr/ark:/12148/... → trop complexe à résoudre ici */
+  const cover = '';
+
+  return { title, author, publisher, year, pages: '', lang, summary, cover, isbn, source: 'BnF' };
+}
+
+/* ─── UI STATES ──────────────────────────────────────── */
+function showLoader(on) {
+  document.getElementById('loader').style.display   = on ? 'flex' : 'none';
+  document.getElementById('result').style.display   = 'none';
+  document.getElementById('errcard').style.display  = 'none';
+  document.getElementById('idle').style.display     = 'none';
+  if (!on) document.getElementById('btnStart').style.display = 'block';
+}
+
+function showResult(b) {
+  showLoader(false);
+
+  document.getElementById('rTitle').textContent  = b.title;
+  document.getElementById('rAuthor').textContent = b.author;
+
+  const parts = [];
+  if (b.year) parts.push(b.year);
+  if (b.pages) parts.push(b.pages + ' p.');
+  if (b.publisher) parts.push(b.publisher);
+  if (b.meta2) parts.push(b.meta2);
+  document.getElementById('rMeta').textContent = parts.join(' · ');
+
+  const srcTxt = document.getElementById('rSrcTxt');
+  if (b.sourceAll && b.sourceAll.length > 1) {
+    srcTxt.textContent = b.source + ' +' + (b.sourceAll.length - 1);
+    document.getElementById('rSrc').title = 'Sources : ' + b.sourceAll.join(', ');
+  } else {
+    srcTxt.textContent = b.source;
+  }
+
+  const img = document.getElementById('rCover');
+  const ph  = document.getElementById('rCoverPh');
+  img.onerror = function() { img.style.display='none'; ph.style.display='flex'; };
+  if (b.cover) {
+    img.src = b.cover;
+    img.style.display = 'block';
+    ph.style.display  = 'none';
+  } else {
+    img.style.display = 'none';
+    ph.style.display  = 'flex';
+  }
+
+  document.querySelector('.r-summary-label').textContent = b.isFood ? 'Composition & Nutrition' : 'Résumé';
+  document.getElementById('rSummary').textContent =
+    b.summary || (b.isFood ? 'Aucune information nutritionnelle disponible.' : 'Aucun résumé disponible pour ce livre.');
+  document.querySelector('.r-summary-wrap').style.display = 'block';
+
+  document.getElementById('result').style.display   = 'block';
+  document.getElementById('btnStart').style.display = 'block';
+}
+
+function showError(msg) {
+  document.getElementById('errTxt').textContent     = msg.replace(/\\n/g,'\n');
+  document.getElementById('errcard').style.display  = 'block';
+  document.getElementById('idle').style.display     = 'none';
+  document.getElementById('btnStart').style.display = 'block';
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className   = 'status ' + (cls || 'muted');
+}
+
+/* ─── TOAST ──────────────────────────────────────────── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ─── RESET ──────────────────────────────────────────── */
+function resetUI() {
+  document.getElementById('result').style.display  = 'none';
+  document.getElementById('errcard').style.display = 'none';
+  document.getElementById('loader').style.display  = 'none';
+  document.getElementById('beam').classList.remove('paused');
+  document.getElementById('tprog').style.stroke = 'var(--accent)';
+  currentBook = null;
+}
+
+function resetScanner() {
+  resetUI();
+  clearISBN();
+  document.getElementById('pills-books').style.display = 'flex';
+  document.getElementById('pills-food').style.display  = 'none';
+  document.getElementById('manualISBN').value    = '';
+  document.getElementById('vwrap').style.display     = 'none';
+  document.getElementById('idle').style.display      = 'flex';
+  document.getElementById('btnStart').style.display  = 'block';
+  document.getElementById('btnCancel').style.display = 'none';
+  setStatus('Pointez la caméra vers le code-barres ISBN du livre', 'muted');
+}
+
+/* ─── SAISIE MANUELLE ────────────────────────────────── */
+function searchManual() {
+  const raw = document.getElementById('manualISBN').value.replace(/[\s\-]/g, '');
+  if (!raw) { showToast('⚠️ Saisissez un ISBN'); return; }
+  if (raw.length < 8) { showToast('⚠️ Code trop court (min. 8 chiffres)'); return; }
+  if (raw.length > 13) { showToast('⚠️ ISBN trop long (max. 13 chiffres)'); return; }
+  if (!/^\d+$/.test(raw)) { showToast('⚠️ Chiffres uniquement'); return; }
+
+  resetUI();
+  setISBN(raw);
+  document.getElementById('idle').style.display = 'none';
+  if (raw.startsWith('978') || raw.startsWith('979') || raw.length === 10) {
+    fetchBook(raw);
+  } else {
+    fetchFood(raw);
+  }
+}
+
+/* ─── INIT ───────────────────────────────────────────── */
+resetScanner();
+</script>
+</body>
+</html>
