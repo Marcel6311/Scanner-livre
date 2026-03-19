@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #131313;
+      --surface2: #1a1a1a;
+      --border: #242424;
+      --border2: #2e2e2e;
+      --accent: #00e87a;
+      --accent-glow: rgba(0, 232, 122, 0.18);
+      --amber: #ffb700;
+      --red: #ff3b3b;
+      --text: #f2f2f2;
+      --text2: #999;
+      --text3: #555;
+      --mono: 'IBM Plex Mono', monospace;
+      --ui: 'Barlow Condensed', sans-serif;
+      --circumference: 150.796px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--ui);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .hd {
+      flex-shrink: 0;
+      padding: env(safe-area-inset-top, 12px) 18px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .hd-icon {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .hd-title { font-size: 24px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; line-height: 1; }
+    .hd-sub { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--text3); margin-top: 2px; }
+
+    /* ─── ISBN BANNER (permanent) ───────────────────────── */
+    .isbn-bar {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .isbn-tag {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .16em;
+      color: var(--text3);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .isbn-led {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text3);
+      flex-shrink: 0;
+      transition: background .3s, box-shadow .3s;
+    }
+    .isbn-led.on { background: var(--accent); box-shadow: 0 0 7px var(--accent); animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .isbn-val {
+      font-family: var(--mono);
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: var(--accent);
+      flex: 1;
+      transition: color .3s;
+    }
+    .isbn-val.empty { color: var(--border2); }
+
+    /* ─── SCROLLABLE BODY ───────────────────────────────── */
+    .body {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── VIEWPORT ──────────────────────────────────────── */
+    #vwrap {
+      display: none;
+      position: relative;
+      width: 100%;
+      background: #000;
+      flex-shrink: 0;
+    }
+    #viewport { width: 100%; position: relative; }
+    #viewport video { width: 100%; display: block; max-height: 42vh; object-fit: cover; }
+    #viewport canvas.drawingBuffer { display: none !important; }
+
+    /* overlay */
+    .ov { position: absolute; inset: 0; pointer-events: none; }
+    .corner {
+      position: absolute; width: 22px; height: 22px;
+      border-color: var(--accent); border-style: solid;
+    }
+    .c-tl { top: 15%; left: 8%; border-width: 2px 0 0 2px; }
+    .c-tr { top: 15%; right: 8%; border-width: 2px 2px 0 0; }
+    .c-bl { bottom: 15%; left: 8%; border-width: 0 0 2px 2px; }
+    .c-br { bottom: 15%; right: 8%; border-width: 0 2px 2px 0; }
+    .scan-beam {
+      position: absolute; left: 8%; right: 8%; height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--accent) 40%, var(--accent) 60%, transparent 100%);
+      box-shadow: 0 0 10px var(--accent), 0 0 20px var(--accent-glow);
+      animation: beam 2s ease-in-out infinite;
+      top: 20%;
+    }
+    @keyframes beam { 0%,100%{top:20%} 50%{top:80%} }
+    .scan-beam.paused { animation-play-state: paused; }
+
+    /* timer ring */
+    .timer-wrap {
+      position: absolute; top: 10px; right: 10px;
+      width: 54px; height: 54px;
+    }
+    .timer-wrap svg { transform: rotate(-90deg); }
+    .t-track { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 3; }
+    .t-prog {
+      fill: none; stroke: var(--accent); stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 150.796;
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 1s linear, stroke .3s;
+    }
+    .t-num {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 17px; font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ─── IDLE ILLUSTRATION ─────────────────────────────── */
+    #idle {
+      padding: 36px 20px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      opacity: .45;
+    }
+    .idle-txt { font-size: 12px; letter-spacing: .1em; color: var(--text3); }
+
+    /* ─── CONTROLS ──────────────────────────────────────── */
+    .ctrl {
+      flex-shrink: 0;
+      padding: 14px 16px;
+      display: flex; gap: 10px;
+    }
+    .btn {
+      border: none; cursor: pointer;
+      font-family: var(--ui); font-weight: 700; font-size: 16px;
+      letter-spacing: .07em; text-transform: uppercase;
+      border-radius: 12px; padding: 16px 20px;
+      transition: transform .15s, opacity .15s;
+    }
+    .btn:active { transform: scale(.96); opacity: .85; }
+    .btn-primary { flex: 1; background: var(--accent); color: #000; }
+    .btn-cancel {
+      background: var(--red); color: #fff;
+      display: none;
+    }
+
+    .status {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 4px 20px 14px;
+      font-size: 13px; letter-spacing: .05em;
+      min-height: 32px;
+    }
+    .status.scanning { color: var(--accent); }
+    .status.timeout  { color: var(--amber); }
+    .status.muted    { color: var(--text3); }
+
+    /* ─── LOADER ────────────────────────────────────────── */
+    #loader {
+      display: none;
+      padding: 28px; text-align: center;
+      flex-direction: column; align-items: center; gap: 14px;
+    }
+    .spinner {
+      width: 38px; height: 38px;
+      border: 3px solid var(--border2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-txt { font-size: 12px; letter-spacing: .1em; color: var(--text3); }
+    .src-pills {
+      display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+      margin-top: 4px;
+    }
+    .src-pill {
+      font-size: 10px; letter-spacing: .08em; font-family: var(--mono);
+      padding: 3px 9px; border-radius: 20px;
+      border: 1px solid var(--border2); color: var(--text3);
+      transition: border-color .3s, color .3s;
+    }
+    .src-pill.active  { border-color: var(--accent); color: var(--accent); }
+    .src-pill.done    { border-color: var(--border2); color: var(--text3); opacity: .5; }
+    .src-pill.found   { border-color: var(--accent); color: var(--accent); opacity: .7; }
+
+    /* ─── RESULT CARD ───────────────────────────────────── */
+    #result {
+      display: none;
+      margin: 4px 14px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+    }
+    .r-top {
+      display: flex; gap: 14px; padding: 16px 16px 14px;
+      align-items: flex-start;
+    }
+    .r-cover-wrap {
+      flex-shrink: 0; width: 96px; height: 140px;
+      border-radius: 7px; overflow: hidden;
+      background: var(--surface2); border: 1px solid var(--border2);
+      box-shadow: 4px 6px 16px rgba(0,0,0,.6);
+    }
+    .r-cover { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
+    .r-cover-ph { width: 100%; height: 100%; display: none; align-items: center; justify-content: center; }
+    .r-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .r-title { font-size: 17px; font-weight: 700; line-height: 1.25; color: var(--text); }
+    .r-author { font-size: 13px; color: var(--accent); font-weight: 600; }
+    .r-meta   { font-size: 10px; font-family: var(--mono); color: var(--text3); }
+    .r-src {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text3); background: var(--surface2);
+      padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+    .r-src-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+    .r-div { height: 1px; background: var(--border); margin: 0 16px; }
+    /* Résumé — la page défile naturellement, pas de scroll imbriqué */
+    .r-summary-wrap { padding: 14px 16px 4px; }
+    .r-summary-label {
+      font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text3); margin-bottom: 8px; font-family: var(--mono);
+    }
+    .r-summary { font-size: 13px; line-height: 1.75; color: #ccc; }
+    .r-actions { padding: 14px; }
+    .btn-again {
+      width: 100%; padding: 14px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border2); border-radius: 10px;
+      font-family: var(--ui); font-size: 15px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: transform .15s;
+    }
+    .btn-again:active { transform: scale(.96); }
+
+    /* ─── NUTRI-SCORE VISUEL ─────────────────────────────── */
+    .nutri-wrap { padding: 12px 16px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .nutri-score { display: flex; align-items: flex-end; gap: 2px; }
+    .nutri-box {
+      width: 22px; border-radius: 4px 4px 0 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: rgba(255,255,255,.5);
+      transition: all .2s;
+    }
+    .nutri-box.active { color: #fff; transform: scaleY(1.15); transform-origin: bottom; border-radius: 5px 5px 0 0; }
+    .nutri-A { background:#1e8a3c; height: 24px; }
+    .nutri-B { background:#85bb2f; height: 28px; }
+    .nutri-C { background:#f9c623; height: 32px; color: rgba(0,0,0,.5) !important; }
+    .nutri-D { background:#e47921; height: 36px; }
+    .nutri-E { background:#e63e11; height: 40px; }
+    .nutri-A.active,.nutri-B.active { color: #fff !important; }
+    .nutri-C.active { color: #000 !important; }
+    .eco-badge {
+      padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      font-family: var(--mono); letter-spacing: .06em;
+    }
+    .eco-A { background: #1e8a3c; color: #fff; }
+    .eco-B { background: #85bb2f; color: #fff; }
+    .eco-C { background: #f9c623; color: #000; }
+    .eco-D { background: #e47921; color: #fff; }
+    .eco-E { background: #e63e11; color: #fff; }
+    .eco-unknown { background: var(--surface2); color: var(--text3); border: 1px solid var(--border2); }
+
+    /* ─── ADDITIFS ───────────────────────────────────────── */
+    .additives-wrap { padding: 12px 16px 0; }
+    .additives-title {
+      font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text3); margin-bottom: 8px; font-family: var(--mono);
+    }
+    .additive-list { display: flex; flex-direction: column; gap: 5px; }
+    .additive-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 7px 10px; border-radius: 8px; font-size: 12px;
+    }
+    .additive-row.danger  { background: rgba(230,62,17,.12); border: 1px solid rgba(230,62,17,.25); }
+    .additive-row.caution { background: rgba(249,198,35,.10); border: 1px solid rgba(249,198,35,.25); }
+    .additive-row.ok      { background: rgba(30,138,60,.08);  border: 1px solid rgba(30,138,60,.2); }
+    .additive-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .additive-name { font-weight: 700; color: var(--text); }
+    .additive-desc { color: var(--text2); font-size: 11px; margin-top: 2px; line-height: 1.4; }
+    #errcard {
+      display: none;
+      margin: 4px 14px 14px;
+      background: rgba(255,59,59,.08);
+      border: 1px solid rgba(255,59,59,.25);
+      border-radius: 14px;
+      padding: 22px 20px;
+      text-align: center;
+    }
+    .err-icon { font-size: 28px; margin-bottom: 10px; }
+    .err-txt { font-size: 14px; color: #ff8888; line-height: 1.5; margin-bottom: 16px; }
+    .btn-retry {
+      padding: 12px 28px;
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border2); border-radius: 10px;
+      font-family: var(--ui); font-size: 15px; font-weight: 700;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    /* ─── TOAST ──────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 12px) + 20px);
+      left: 50%; transform: translateX(-50%) translateY(70px);
+      background: var(--accent); color: #000;
+      padding: 11px 22px; border-radius: 100px;
+      font-family: var(--ui); font-size: 14px; font-weight: 700;
+      letter-spacing: .05em;
+      transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+      z-index: 9999; white-space: nowrap; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── SAISIE MANUELLE ────────────────────────────────── */
+    .manual-wrap {
+      flex-shrink: 0;
+      margin: 0 14px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .manual-wrap label {
+      display: none; /* accessible mais invisible */
+    }
+    .manual-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 13px 14px;
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: .1em;
+      color: var(--text);
+      caret-color: var(--accent);
+      outline: none;
+      -webkit-appearance: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .manual-input::placeholder { color: var(--text3); letter-spacing: .06em; font-size: 14px; }
+    .manual-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .btn-search {
+      flex-shrink: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 13px 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, border-color .2s, transform .15s;
+      color: var(--text);
+    }
+    .btn-search:active { transform: scale(.93); }
+    .btn-search:hover  { background: var(--border); border-color: var(--accent); }
+    .manual-sep {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px 10px;
+    }
+    .sep-line { flex: 1; height: 1px; background: var(--border); }
+    .sep-txt  { font-size: 10px; letter-spacing: .12em; color: var(--text3); text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hd">
+  <div class="hd-icon">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4h2M4 8h2M4 12h2M4 16h2M4 20h2M8 4h1M8 8h1M8 12h1M8 16h1M8 20h1M11 4h2M14 4h2M17 4h3M11 8h6M20 8v2M11 12h2M14 12h3M20 12v8M14 16h6"/>
+    </svg>
+  </div>
+  <div>
+    <div class="hd-title">Scanner</div>
+    <div class="hd-sub">Livres · Produits alimentaires</div>
+  </div>
+</div>
+
+<!-- ISBN BANNER PERMANENT -->
+<div class="isbn-bar">
+  <span class="isbn-tag">ISBN</span>
+  <div class="isbn-led" id="led"></div>
+  <span class="isbn-val empty" id="isbnVal">— — — — — — — — — — — — —</span>
+</div>
+
+<!-- BODY -->
+<div class="body">
+
+  <!-- VIEWPORT -->
+  <div id="vwrap">
+    <div id="viewport"></div>
+    <div class="ov">
+      <div class="corner c-tl"></div>
+      <div class="corner c-tr"></div>
+      <div class="corner c-bl"></div>
+      <div class="corner c-br"></div>
+      <div class="scan-beam" id="beam"></div>
+      <div class="timer-wrap">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <circle class="t-track" cx="27" cy="27" r="24"/>
+          <circle class="t-prog" id="tprog" cx="27" cy="27" r="24"/>
+        </svg>
+        <div class="t-num" id="tnum">8</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IDLE -->
+  <div id="idle">
+    <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+      <rect x="8" y="16" width="56" height="40" rx="4" stroke="#444" stroke-width="1.5"/>
+      <line x1="19" y1="16" x2="19" y2="56" stroke="#444" stroke-width="4"/>
+      <line x1="27" y1="16" x2="27" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="33" y1="16" x2="33" y2="56" stroke="#333" stroke-width="3"/>
+      <line x1="40" y1="16" x2="40" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="46" y1="16" x2="46" y2="56" stroke="#444" stroke-width="2.5"/>
+      <line x1="52" y1="16" x2="52" y2="56" stroke="#444" stroke-width="1.5"/>
+      <line x1="8" y1="63" x2="64" y2="63" stroke="#00e87a" stroke-width="2" opacity=".45"/>
+    </svg>
+    <div class="idle-txt">Prêt à scanner</div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="ctrl">
+    <button class="btn btn-primary" id="btnStart" onclick="startScan()">📷 &nbsp;Scanner</button>
+    <button class="btn btn-cancel" id="btnCancel" onclick="cancelScan()">✕ &nbsp;Annuler</button>
+  </div>
+
+  <div class="status muted" id="status">Livre ou produit alimentaire</div>
+
+  <!-- SÉPARATEUR -->
+  <div class="manual-sep">
+    <div class="sep-line"></div>
+    <span class="sep-txt">ou saisie manuelle</span>
+    <div class="sep-line"></div>
+  </div>
+
+  <!-- SAISIE MANUELLE -->
+  <div class="manual-wrap">
+    <label for="manualISBN">ISBN manuel</label>
+    <input
+      class="manual-input"
+      id="manualISBN"
+      type="tel"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      placeholder="ex. 9782070360024"
+      maxlength="17"
+      autocomplete="off"
+      spellcheck="false"
+      onkeydown="if(event.key==='Enter') searchManual()"
+    >
+    <button class="btn-search" onclick="searchManual()" title="Rechercher">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+    </button>
+  </div>
+  <div id="loader">
+    <div class="spinner"></div>
+    <div class="loader-txt" id="loaderTxt">Recherche en cours…</div>
+    <div class="src-pills" id="pills-books">
+      <div class="src-pill" id="pill-google">Google Books</div>
+      <div class="src-pill" id="pill-open">Open Library</div>
+      <div class="src-pill" id="pill-inv">Inventaire.io</div>
+      <div class="src-pill" id="pill-bnf">BnF</div>
+    </div>
+    <div class="src-pills" id="pills-food" style="display:none">
+      <div class="src-pill" id="pill-off">Open Food Facts</div>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result">
+    <div class="r-top">
+      <!-- Couverture portrait -->
+      <div class="r-cover-wrap">
+        <img class="r-cover" id="rCover" src="" alt="Couverture"
+          onerror="this.style.display='none';document.getElementById('rCoverPh').style.display='flex';">
+        <div class="r-cover-ph" id="rCoverPh">
+          <svg width="32" height="32" fill="#333" viewBox="0 0 24 24">
+            <path d="M6 2h12a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm0 2v16h12V4H6zm2 2h8v2H8V6zm0 4h6v2H8v-2z"/>
+          </svg>
+        </div>
+      </div>
+      <!-- Infos -->
+      <div class="r-info">
+        <div class="r-title" id="rTitle"></div>
+        <div class="r-author" id="rAuthor"></div>
+        <div class="r-meta" id="rMeta"></div>
+        <div class="r-src" id="rSrc"><div class="r-src-dot"></div><span id="rSrcTxt"></span></div>
+      </div>
+    </div>
+    <div class="r-div"></div>
+    <!-- Nutri-Score + Éco-Score visuels (food only) -->
+    <div class="nutri-wrap" id="rNutriWrap" style="display:none">
+      <div class="nutri-score" id="rNutriScore"></div>
+      <div id="rEcoBadge"></div>
+    </div>
+    <!-- Additifs (food only) -->
+    <div class="additives-wrap" id="rAdditivesWrap" style="display:none">
+      <div class="additives-title">⚗️ Additifs</div>
+      <div class="additive-list" id="rAdditivesList"></div>
+    </div>
+    <div class="r-div" id="rDivSummary"></div>
+    <!-- Résumé / Nutrition -->
+    <div class="r-summary-wrap">
+      <div class="r-summary-label" id="rSummaryLabel">Résumé</div>
+      <div class="r-summary" id="rSummary"></div>
+    </div>
+    <!-- Nouveau scan -->
+    <div class="r-actions">
+      <button class="btn-again" onclick="resetScanner()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        Nouveau scan
+      </button>
+    </div>
+  </div>
+
+  <!-- ERROR -->
+  <div id="errcard">
+    <div class="err-icon">⚠️</div>
+    <div class="err-txt" id="errTxt"></div>
+    <button class="btn-retry" onclick="resetScanner()">Réessayer</button>
+  </div>
+
+</div><!-- /.body -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Quagga chargé à la demande -->
+<script>
+/* ─────────────────────────────────────────────────────────
+   CONFIG
+───────────────────────────────────────────────────────── */
+const LIBRARY_URL   = 'https://marcel6311.github.io/Biblioth%C3%A8que/ma-bibliotheque.html';
+const SCAN_DURATION = 12; // secondes
+const CIRC          = 2 * Math.PI * 24; // ≈ 150.796
+
+/* ─── STATE ──────────────────────────────────────────── */
+let scanning      = false;
+let quaggaLive    = false;
+let scanTimer     = null;
+let tickInterval  = null;
+let currentISBN   = '';
+let currentBook   = null;
+let summaryOpen   = false;
+
+/* ─── TIMER UI ───────────────────────────────────────── */
+function startTimer() {
+  let s = SCAN_DURATION;
+  const prog = document.getElementById('tprog');
+  const num  = document.getElementById('tnum');
+  prog.style.stroke = 'var(--accent)';
+  prog.style.strokeDashoffset = '0';
+  num.textContent = s;
+
+  tickInterval = setInterval(() => {
+    s--;
+    num.textContent = s;
+    prog.style.strokeDashoffset = CIRC * (1 - s / SCAN_DURATION);
+    if (s <= 3) prog.style.stroke = 'var(--red)';
+    if (s <= 0) clearInterval(tickInterval);
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(tickInterval);
+  tickInterval = null;
+}
+
+/* ─── SCAN ───────────────────────────────────────────── */
+function loadQuagga(cb) {
+  if (window.Quagga) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js';
+  s.onload = cb;
+  s.onerror = () => { showError("Impossible de charger le scanner.\nVérifiez votre connexion."); };
+  document.head.appendChild(s);
+}
+
+function startScan() {
+  resetUI();
+  setStatus('Chargement du scanner…', 'scanning');
+
+  loadQuagga(() => {
+  scanning = true;
+
+  document.getElementById('vwrap').style.display    = 'block';
+  document.getElementById('idle').style.display     = 'none';
+  document.getElementById('btnStart').style.display = 'none';
+  document.getElementById('btnCancel').style.display = 'block';
+  document.getElementById('led').classList.add('on');
+  setStatus('Scan en cours… pointez vers le code-barres', 'scanning');
+  startTimer();
+
+  scanTimer = setTimeout(() => {
+    if (scanning && !currentISBN) {
+      stopScan();
+      setStatus('Aucun code-barres détecté — réessayez', 'timeout');
+      document.getElementById('idle').style.display = 'flex';
+      document.getElementById('btnStart').style.display = 'block';
+    }
+  }, SCAN_DURATION * 1000);
+
+  Quagga.init({
+    inputStream: {
+      type: 'LiveStream',
+      target: document.getElementById('viewport'),
+      constraints: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    },
+    locator: {
+      patchSize: 'medium',
+      halfSample: false      // false = meilleure détection toutes orientations
+    },
+    numOfWorkers: 2,
+    frequency: 12,
+    decoder: {
+      readers: ['ean_reader', 'ean_8_reader'],
+      multiple: false
+    },
+    locate: true             // cherche le code à n'importe quel angle
+  }, err => {
+    if (err) {
+      stopScan();
+      showError("Impossible d'accéder à la caméra.\nVérifiez les autorisations dans Réglages > Safari.");
+      return;
+    }
+    quaggaLive = true;
+    Quagga.start();
+  });
+
+  Quagga.onDetected(onDetected);
+  }); // fin loadQuagga
+}
+
+function onDetected(result) {
+  if (!scanning) return;
+  const code = result.codeResult.code;
+  if (!code || code.length < 8) return;
+  stopScan();
+  setISBN(code);
+  // Livre = commence par 978 ou 979 ou ISBN-10 (10 chiffres)
+  // Tout autre EAN-13 ou EAN-8 = produit alimentaire
+  if (code.startsWith('978') || code.startsWith('979') || code.length === 10) {
+    fetchBook(code);
+  } else {
+    fetchFood(code);
+  }
+}
+
+/* ─── BASE ADDITIFS E-NUMBERS ────────────────────────── */
+const ADDITIVES = {
+  /* ════════ COLORANTS ════════ */
+  'E100':['🟢','Curcumine','ok','Colorant naturel (curcuma). Antioxydant reconnu, sans danger.'],
+  'E101':['🟢','Riboflavine (B2)','ok','Colorant jaune naturel. Vitamine B2 essentielle.'],
+  'E102':['🔴','Tartrazine','danger','Colorant jaune azoïque. Hyperactivité enfant, allergies. Avertissement EU obligatoire.'],
+  'E104':['🔴','Jaune de quinoléine','danger','Colorant synthétique. Hyperactivité, urticaire. Déconseillé aux enfants.'],
+  'E110':['🔴','Jaune orangé S','danger','Colorant azoïque. Hyperactivité, allergies. Avertissement EU.'],
+  'E120':['🔴','Carmin (cochenille)','danger','Colorant rouge animal. Allergies sévères, choc anaphylactique possible.'],
+  'E122':['🔴','Azorubine','danger','Colorant rouge azoïque. Hyperactivité, allergies. Avertissement EU.'],
+  'E123':['🔴','Amarante','danger','Colorant rouge. Interdit aux USA et en Russie. Suspecté cancérogène.'],
+  'E124':['🔴','Rouge cochenille A','danger','Colorant azoïque. Hyperactivité, allergies. Avertissement EU.'],
+  'E125':['🔴','Écarlate GN','danger','Colorant. Interdit dans de nombreux pays. Toxicité suspectée.'],
+  'E126':['🔴','Ponceau 6R','danger','Colorant azoïque. Interdit dans l\'UE. Risque cancérogène.'],
+  'E127':['🔴','Érythrosine','danger','Colorant rouge. Peut perturber la thyroïde. Usage très limité.'],
+  'E128':['🔴','Rouge 2G','danger','Colorant azoïque. Interdit dans la plupart des pays. Peut former aniline (toxique).'],
+  'E129':['🔴','Rouge allura AC','danger','Colorant rouge. Hyperactivité chez l\'enfant. Avertissement EU.'],
+  'E131':['🔴','Bleu patenté V','danger','Colorant bleu synthétique. Réactions allergiques, hypotension.'],
+  'E132':['🟡','Indigotine (bleu indigo)','caution','Colorant bleu. Nausées possibles à forte dose.'],
+  'E133':['🟡','Bleu brillant FCF','caution','Colorant bleu synthétique. Effets modérés, à limiter.'],
+  'E140':['🟢','Chlorophylles','ok','Colorant vert naturel (plantes). Sans danger connu.'],
+  'E141':['🟢','Complexes chlorophylliens','ok','Colorant vert. Naturel, bien toléré.'],
+  'E142':['🟡','Vert acide brillant','caution','Colorant synthétique. Peu étudié, à éviter en excès.'],
+  'E150a':['🟢','Caramel simple','ok','Colorant brun. Naturel, sans danger.'],
+  'E150b':['🟡','Caramel au sulfite','caution','Colorant. Peut contenir des impuretés soufrées.'],
+  'E150c':['🟡','Caramel ammoniacal','caution','Colorant. Contient du 4-méthylimidazole, suspecté cancérogène (CIRC 2B).'],
+  'E150d':['🟡','Caramel au sulfite ammoniacal','caution','Colorant (cola). Contient du 4-MEI, suspecté cancérogène.'],
+  'E151':['🟡','Noir brillant BN','caution','Colorant noir azoïque. Réactions allergiques possibles.'],
+  'E153':['🟢','Charbon végétal','ok','Colorant noir naturel. Utilisé comme détoxifiant. Sans danger.'],
+  'E154':['🔴','Brun FK','danger','Colorant azoïque. Interdit dans l\'UE sauf harengs. Toxicité suspectée.'],
+  'E155':['🟡','Brun HT','caution','Colorant azoïque. Peut provoquer réactions allergiques.'],
+  'E160a':['🟢','Carotènes','ok','Colorant orange naturel (carottes). Précurseur vitamine A.'],
+  'E160b':['🟢','Rocou (bixine)','ok','Colorant naturel (arbuste). Bien toléré, peut rarement causer allergies.'],
+  'E160c':['🟢','Extrait de paprika','ok','Colorant naturel. Antioxydant, sans danger.'],
+  'E160d':['🟢','Lycopène','ok','Colorant rouge naturel (tomate). Antioxydant bénéfique.'],
+  'E160e':['🟢','Bêta-apo-8-caroténal','ok','Colorant caroténoïde. Généralement bien toléré.'],
+  'E161b':['🟢','Lutéine','ok','Colorant naturel. Bénéfique pour la santé des yeux.'],
+  'E161g':['🟢','Cantaxanthine','ok','Colorant caroténoïde. Bien toléré aux doses alimentaires.'],
+  'E162':['🟢','Rouge de betterave (bétanine)','ok','Colorant naturel. Sans danger connu.'],
+  'E163':['🟢','Anthocyanes','ok','Colorants naturels (baies, raisin). Antioxydants puissants.'],
+  'E170':['🟢','Carbonate de calcium','ok','Colorant blanc / minéral. Calcium naturel, bénéfique.'],
+  'E171':['🟡','Dioxyde de titane','caution','Colorant blanc. Classé cancérogène possible par ANSES. Interdit dans les aliments dans l\'UE depuis 2022.'],
+  'E172':['🟢','Oxydes de fer','ok','Colorants minéraux. Utilisés en petites quantités, sans danger.'],
+  'E173':['🟡','Aluminium','caution','Colorant métallique. Accumulation possible, neurotoxique à forte dose.'],
+  'E174':['🟡','Argent','caution','Colorant métallique. Usage très limité, décoration uniquement.'],
+  'E175':['🟢','Or','ok','Colorant décoratif. Biologiquement inerte, sans danger.'],
+  'E180':['🟡','Lithol rubine BK','caution','Colorant pour fromages. Peu étudié.'],
+  /* ════════ CONSERVATEURS ════════ */
+  'E200':['🟢','Acide sorbique','ok','Conservateur naturel (baies). Bien toléré. Peut rarement causer allergies cutanées.'],
+  'E201':['🟢','Sorbate de sodium','ok','Conservateur. Bien toléré, dérivé naturel.'],
+  'E202':['🟢','Sorbate de potassium','ok','Conservateur. Sûr aux doses autorisées.'],
+  'E203':['🟢','Sorbate de calcium','ok','Conservateur. Bien toléré.'],
+  'E210':['🔴','Acide benzoïque','danger','Peut former du benzène (cancérogène) avec la vitamine C. Hyperactivité.'],
+  'E211':['🔴','Benzoate de sodium','danger','Forme du benzène avec E300. Hyperactivité chez l\'enfant. Avertissement EU.'],
+  'E212':['🟡','Benzoate de potassium','caution','Même risque potentiel que E211. À surveiller.'],
+  'E213':['🟡','Benzoate de calcium','caution','Même risque que E211. Prudence.'],
+  'E214':['🟡','Éthyl para-hydroxybenzoate','caution','Parabène. Perturbateur endocrinien suspecté.'],
+  'E215':['🟡','Éthyl para-hydroxybenzoate sodique','caution','Parabène. Perturbateur endocrinien suspecté.'],
+  'E216':['🔴','Propyl para-hydroxybenzoate','danger','Parabène. Interdit dans l\'UE. Perturbateur endocrinien avéré.'],
+  'E217':['🔴','Propyl para-hydroxybenzoate sodique','danger','Parabène. Interdit dans l\'UE. Perturbateur endocrinien.'],
+  'E218':['🟡','Méthyl para-hydroxybenzoate','caution','Parabène. Perturbateur endocrinien, à éviter.'],
+  'E219':['🟡','Méthyl para-hydroxybenzoate sodique','caution','Parabène. Perturbateur endocrinien.'],
+  'E220':['🟡','Dioxyde de soufre','caution','Conservateur. Crises d\'asthme chez les asthmatiques. Allergies.'],
+  'E221':['🟡','Sulfite de sodium','caution','Conservateur. Sensibilité chez les personnes allergiques au soufre.'],
+  'E222':['🟡','Bisulfite de sodium','caution','Conservateur. Même prudence que E221.'],
+  'E223':['🟡','Métabisulfite de sodium','caution','Conservateur. Asthme et allergies possibles.'],
+  'E224':['🟡','Métabisulfite de potassium','caution','Conservateur. Même risque que E223.'],
+  'E225':['🟡','Sulfite de potassium','caution','Conservateur. Précaution pour asthmatiques.'],
+  'E226':['🟡','Sulfite de calcium','caution','Conservateur. Sensibilité possible.'],
+  'E227':['🟡','Bisulfite de calcium','caution','Conservateur. Prudence asthmatiques.'],
+  'E228':['🟡','Bisulfite de potassium','caution','Conservateur. Même précaution sulfites.'],
+  'E230':['🔴','Biphényle','danger','Fongicide agrumes. Cancérogène suspecté. Interdit dans l\'UE.'],
+  'E231':['🔴','Orthophénylphénol','danger','Fongicide. Cancérogène possible. Usage très restreint.'],
+  'E232':['🔴','Orthophénylphénate de sodium','danger','Fongicide. Même risque que E231.'],
+  'E234':['🟢','Nisine','ok','Conservateur naturel (fermentation). Antibiotique naturel alimentaire. Sûr.'],
+  'E235':['🟡','Natamycine','caution','Antifongique naturel. Utilisé en surface des fromages/charcuteries. Pas d\'absorption significative.'],
+  'E239':['🟡','Hexaméthylène tétramine','caution','Conservateur. Libère du formaldéhyde. Usage très limité.'],
+  'E242':['🟢','Diméthyl dicarbonate','ok','Conservateur pour boissons. Se décompose sans résidu. Sûr.'],
+  'E249':['🔴','Nitrite de potassium','danger','Conservateur. Précurseur de nitrosamines cancérogènes.'],
+  'E250':['🔴','Nitrite de sodium','danger','Charcuterie. Forme des nitrosamines cancérogènes (CIRC 2A). Cancer colorectal.'],
+  'E251':['🔴','Nitrate de sodium','danger','Converti en nitrites dans l\'organisme. Cancer colorectal associé.'],
+  'E252':['🔴','Nitrate de potassium (salpêtre)','danger','Même risque que E251. Prudence absolue.'],
+  'E260':['🟢','Acide acétique','ok','Vinaigre. Naturel, sûr. Conservateur alimentaire classique.'],
+  'E261':['🟢','Acétate de potassium','ok','Conservateur. Sûr aux doses autorisées.'],
+  'E262':['🟢','Acétates de sodium','ok','Conservateur. Sel du vinaigre. Bien toléré.'],
+  'E263':['🟢','Acétate de calcium','ok','Conservateur. Sûr.'],
+  'E270':['🟢','Acide lactique','ok','Fermentation naturelle. Probiotique indirectement. Très sûr.'],
+  'E280':['🟢','Acide propionique','ok','Conservateur naturel (fromages). Sûr.'],
+  'E281':['🟢','Propionate de sodium','ok','Conservateur pain/gâteaux. Sûr.'],
+  'E282':['🟢','Propionate de calcium','ok','Anti-moisissures pain. Sûr.'],
+  'E283':['🟢','Propionate de potassium','ok','Conservateur. Sûr.'],
+  'E284':['🟢','Acide borique','ok','Caviar uniquement. Doses alimentaires très faibles.'],
+  'E285':['🟢','Tétraborate de sodium','ok','Caviar uniquement. Usage très restreint.'],
+  'E290':['🟢','Dioxyde de carbone','ok','Gaz carbonique naturel. Sûr.'],
+  'E296':['🟢','Acide malique','ok','Acidifiant naturel (pommes). Sûr.'],
+  'E297':['🟢','Acide fumarique','ok','Acidifiant. Présent naturellement. Sûr.'],
+  /* ════════ ANTIOXYDANTS ════════ */
+  'E300':['🟢','Acide ascorbique (vitamine C)','ok','Antioxydant naturel. Bénéfique pour la santé.'],
+  'E301':['🟢','Ascorbate de sodium','ok','Vitamine C sodique. Sûr.'],
+  'E302':['🟢','Ascorbate de calcium','ok','Vitamine C calcique. Sûr.'],
+  'E303':['🟢','Diacétate d\'ascorbyle','ok','Dérivé vitamine C. Sûr.'],
+  'E304':['🟢','Palmitate d\'ascorbyle','ok','Antioxydant dérivé vitamine C. Sûr.'],
+  'E306':['🟢','Tocophérols (vitamine E)','ok','Antioxydant naturel. Protège contre maladies cardiovasculaires.'],
+  'E307':['🟢','Alpha-tocophérol','ok','Vitamine E. Antioxydant bénéfique.'],
+  'E308':['🟢','Gamma-tocophérol','ok','Vitamine E. Antioxydant.'],
+  'E309':['🟢','Delta-tocophérol','ok','Vitamine E. Antioxydant.'],
+  'E310':['🟡','Gallate de propyle','caution','Antioxydant synthétique. Peut provoquer gastrite, allergies.'],
+  'E311':['🟡','Gallate d\'octyle','caution','Antioxydant synthétique. Allergies possibles.'],
+  'E312':['🟡','Gallate de dodécyle','caution','Antioxydant synthétique. Prudence.'],
+  'E315':['🟡','Acide érythorbique','caution','Antioxydant. Dérivé vitamine C. Généralement sûr.'],
+  'E316':['🟡','Érythorbate de sodium','caution','Antioxydant. Même précaution que E315.'],
+  'E319':['🟡','TBHQ (tertio-butylhydroquinone)','caution','Antioxydant synthétique. Cancérogène possible à haute dose. À limiter.'],
+  'E320':['🔴','BHA (butylhydroxyanisole)','danger','Antioxydant synthétique. Cancérogène possible (CIRC 2B). Perturbateur endocrinien suspecté.'],
+  'E321':['🟡','BHT (butylhydroxytoluène)','caution','Antioxydant synthétique. Effets hépatiques à forte dose. Perturbateur endocrinien suspecté.'],
+  'E322':['🟢','Lécithines','ok','Émulsifiant naturel (soja/tournesol). Sûr, bénéfique pour le cerveau.'],
+  'E325':['🟢','Lactate de sodium','ok','Antioxydant naturel (fermentation). Sûr.'],
+  'E326':['🟢','Lactate de potassium','ok','Antioxydant. Sûr.'],
+  'E327':['🟢','Lactate de calcium','ok','Antioxydant. Apport calcique. Sûr.'],
+  'E330':['🟢','Acide citrique','ok','Acidifiant naturel (agrumes). Très bien toléré. Omniprésent.'],
+  'E331':['🟢','Citrates de sodium','ok','Régulateur d\'acidité. Sûr.'],
+  'E332':['🟢','Citrates de potassium','ok','Régulateur d\'acidité. Sûr.'],
+  'E333':['🟢','Citrates de calcium','ok','Apport calcique. Sûr.'],
+  'E334':['🟢','Acide tartrique','ok','Acide naturel (raisin). Sûr.'],
+  'E335':['🟢','Tartrates de sodium','ok','Stabilisant naturel. Sûr.'],
+  'E336':['🟢','Tartrates de potassium (crème de tartre)','ok','Naturel, pâtisserie. Sûr.'],
+  'E337':['🟢','Tartrate de sodium et potassium','ok','Sel de Seignette. Sûr.'],
+  'E338':['🟡','Acide phosphorique','caution','Acidifiant (cola). Peut perturber l\'absorption du calcium, risque osseux à forte consommation.'],
+  'E339':['🟡','Phosphates de sodium','caution','Régulateur d\'acidité. Excès de phosphore problématique (reins, os).'],
+  'E340':['🟡','Phosphates de potassium','caution','Même précaution que E339.'],
+  'E341':['🟡','Phosphates de calcium','caution','Levant. Excès phosphore à surveiller. Apport calcique positif.'],
+  'E343':['🟡','Phosphates de magnésium','caution','Régulateur. Prudence excès phosphore.'],
+  'E350':['🟢','Malates de sodium','ok','Acidifiant naturel. Sûr.'],
+  'E351':['🟢','Malate de potassium','ok','Acidifiant. Sûr.'],
+  'E352':['🟢','Malates de calcium','ok','Acidifiant. Sûr.'],
+  'E353':['🟢','Acide métatartrique','ok','Stabilisant vin. Sûr.'],
+  'E354':['🟢','Tartrate de calcium','ok','Stabilisant. Sûr.'],
+  'E355':['🟢','Acide adipique','ok','Acidifiant. Présent naturellement. Sûr.'],
+  'E356':['🟢','Adipate de sodium','ok','Acidifiant. Sûr.'],
+  'E357':['🟢','Adipate de potassium','ok','Acidifiant. Sûr.'],
+  'E363':['🟢','Acide succinique','ok','Acidifiant naturel. Sûr.'],
+  'E380':['🟢','Citrate de triammonium','ok','Régulateur. Sûr.'],
+  'E385':['🟡','EDTA calcique disodique','caution','Séquestrant. Peut réduire l\'absorption de minéraux essentiels.'],
+  'E392':['🟢','Extraits de romarin','ok','Antioxydant naturel. Propriétés anti-inflammatoires.'],
+  'E400':['🟢','Acide alginique','ok','Gélifiant naturel (algues brunes). Sûr.'],
+  /* ════════ ÉPAISSISSANTS / GÉLIFIANTS / ÉMULSIFIANTS ════════ */
+  'E401':['🟢','Alginate de sodium','ok','Gélifiant naturel (algues). Sûr.'],
+  'E402':['🟢','Alginate de potassium','ok','Gélifiant. Sûr.'],
+  'E403':['🟢','Alginate d\'ammonium','ok','Gélifiant. Sûr.'],
+  'E404':['🟢','Alginate de calcium','ok','Gélifiant. Sûr.'],
+  'E405':['🟢','Alginate de propylène glycol','ok','Émulsifiant. Sûr.'],
+  'E406':['🟢','Agar-agar','ok','Gélifiant naturel (algues rouges). Sûr, fibre alimentaire.'],
+  'E407':['🟡','Carraghénane','caution','Gélifiant (algues). Inflammations intestinales possibles. Déconseillé en cas de MICI.'],
+  'E407a':['🟡','Algues euchema transformées','caution','Similaire carraghénane. Même prudence.'],
+  'E408':['🟢','Gomme de graine de caroube','ok','Gélifiant naturel. Sûr.'],
+  'E409':['🟢','Arabinogalactane','ok','Fibre naturelle. Prébiotique. Sûr.'],
+  'E410':['🟢','Farine de graines de caroube','ok','Épaississant naturel. Sûr.'],
+  'E412':['🟢','Gomme de guar','ok','Épaississant naturel. Fibres alimentaires. Sûr.'],
+  'E413':['🟢','Gomme adragante','ok','Épaississant naturel. Sûr.'],
+  'E414':['🟢','Gomme arabique (acacia)','ok','Épaississant naturel. Prébiotique. Sûr.'],
+  'E415':['🟢','Gomme xanthane','ok','Épaississant (fermentation). Bien toléré.'],
+  'E416':['🟡','Gomme karaya','caution','Épaississant. Réactions allergiques possibles chez certaines personnes.'],
+  'E417':['🟢','Gomme tara','ok','Épaississant naturel. Sûr.'],
+  'E418':['🟢','Gomme gellane','ok','Gélifiant (fermentation). Sûr.'],
+  'E420':['🟡','Sorbitol','caution','Édulcorant/humectant. Effet laxatif à forte dose (>20g/jour).'],
+  'E421':['🟡','Mannitol','caution','Édulcorant. Effet laxatif à forte dose.'],
+  'E422':['🟢','Glycérol','ok','Humectant naturel. Sûr.'],
+  'E425':['🟡','Konjac','caution','Épaississant (igname). Risque d\'étouffement pour enfants en bonbons durs. Interdit dans certains pays.'],
+  'E426':['🟢','Hémicellulose de soja','ok','Émulsifiant. Sûr.'],
+  'E427':['🟢','Gomme de caroube de cassia','ok','Épaississant naturel. Sûr.'],
+  'E431':['🟡','Stéarate de polyoxyéthylène','caution','Émulsifiant synthétique. Peut altérer le microbiote intestinal.'],
+  'E432':['🟡','Polysorbate 20','caution','Émulsifiant. Études suggèrent perturbation microbiote intestinal.'],
+  'E433':['🟡','Polysorbate 80','caution','Émulsifiant. Études sur inflammation intestinale et microbiote.'],
+  'E434':['🟡','Polysorbate 40','caution','Émulsifiant. Même prudence que E433.'],
+  'E435':['🟡','Polysorbate 60','caution','Émulsifiant. Même prudence que E433.'],
+  'E436':['🟡','Polysorbate 65','caution','Émulsifiant. Même précaution.'],
+  'E440':['🟢','Pectines','ok','Gélifiant naturel (fruits). Prébiotique, bénéfique pour le microbiote.'],
+  'E442':['🟢','Phosphatides d\'ammonium','ok','Émulsifiant (cacao). Sûr.'],
+  'E444':['🟢','Acétate isobutyrate de saccharose','ok','Stabilisant. Sûr.'],
+  'E445':['🟢','Esters glycéroliques de résine de bois','ok','Stabilisant boissons. Sûr.'],
+  'E450':['🟡','Diphosphates','caution','Levant. Excès de phosphore peut perturber le métabolisme calcique.'],
+  'E451':['🟡','Triphosphates','caution','Levant. Même précaution que E450.'],
+  'E452':['🟡','Polyphosphates','caution','Séquestrant/liant eau. Forte teneur en phosphore, risque rénal à long terme.'],
+  'E459':['🟢','Bêta-cyclodextrine','ok','Encapsulant. Sûr.'],
+  'E460':['🟢','Cellulose microcristalline','ok','Antiagglomérant naturel. Sûr.'],
+  'E461':['🟢','Méthylcellulose','ok','Épaississant semi-naturel. Sûr.'],
+  'E462':['🟢','Éthylcellulose','ok','Épaississant. Sûr.'],
+  'E463':['🟢','Hydroxypropylcellulose','ok','Épaississant. Sûr.'],
+  'E464':['🟢','Hydroxypropylméthylcellulose','ok','Épaississant. Sûr.'],
+  'E465':['🟢','Méthyléthylcellulose','ok','Épaississant. Sûr.'],
+  'E466':['🟢','Carboxyméthylcellulose sodique','ok','Épaississant. Sûr.'],
+  'E467':['🟢','Carboxyméthylcellulose','ok','Épaississant. Sûr.'],
+  'E468':['🟢','CMC réticulée','ok','Épaississant. Sûr.'],
+  'E469':['🟢','CMC hydrolysée','ok','Épaississant. Sûr.'],
+  'E470a':['🟢','Sels de sodium/potassium d\'acides gras','ok','Émulsifiant. Sûr.'],
+  'E470b':['🟢','Sels de magnésium d\'acides gras','ok','Antiagglomérant. Sûr.'],
+  'E471':['🟢','Mono et diglycérides d\'acides gras','ok','Émulsifiant très courant. Sûr mais indique ultra-transformation.'],
+  'E472a':['🟢','Esters acétiques de mono/diglycérides','ok','Émulsifiant. Sûr.'],
+  'E472b':['🟢','Esters lactiques de mono/diglycérides','ok','Émulsifiant. Sûr.'],
+  'E472c':['🟢','Esters citriques de mono/diglycérides','ok','Émulsifiant. Sûr.'],
+  'E472d':['🟢','Esters tartriques de mono/diglycérides','ok','Émulsifiant. Sûr.'],
+  'E472e':['🟢','Esters diacétyltartriques','ok','Émulsifiant pain. Sûr.'],
+  'E472f':['🟢','Esters mixtes acétiques/tartriques','ok','Émulsifiant. Sûr.'],
+  'E473':['🟢','Esters de saccharose d\'acides gras','ok','Émulsifiant. Sûr.'],
+  'E474':['🟢','Sucroglycérides','ok','Émulsifiant. Sûr.'],
+  'E475':['🟢','Esters polyglycériques d\'acides gras','ok','Émulsifiant. Sûr.'],
+  'E476':['🟢','Polyricinoléate de polyglycérol','ok','Émulsifiant (chocolat). Sûr.'],
+  'E477':['🟢','Esters de propylène glycol','ok','Émulsifiant. Sûr.'],
+  'E479b':['🟡','Huile de soja oxydée thermiquement','caution','Émulsifiant. Composition variable. Prudence.'],
+  'E481':['🟢','Stéaroyl-2-lactylate de sodium','ok','Émulsifiant pain. Sûr.'],
+  'E482':['🟢','Stéaroyl-2-lactylate de calcium','ok','Émulsifiant. Sûr.'],
+  'E483':['🟢','Tartrate de stéaryle','ok','Émulsifiant. Sûr.'],
+  'E491':['🟢','Monostéarate de sorbitane','ok','Émulsifiant. Sûr.'],
+  'E492':['🟢','Tristéarate de sorbitane','ok','Émulsifiant. Sûr.'],
+  'E493':['🟢','Monolaurate de sorbitane','ok','Émulsifiant. Sûr.'],
+  'E494':['🟢','Mono-oléate de sorbitane','ok','Émulsifiant. Sûr.'],
+  'E495':['🟢','Monopalmitate de sorbitane','ok','Émulsifiant. Sûr.'],
+  /* ════════ EXHAUSTEURS DE GOÛT ════════ */
+  'E620':['🟡','Acide glutamique','caution','Exhausteur de goût naturel. Peut provoquer maux de tête chez personnes sensibles.'],
+  'E621':['🟡','Glutamate monosodique (MSG)','caution','Exhausteur de goût. "Syndrome du restaurant chinois" chez certaines personnes sensibles.'],
+  'E622':['🟡','Glutamate de potassium','caution','Même prudence que E621.'],
+  'E623':['🟡','Glutamate de calcium','caution','Même prudence que E621.'],
+  'E624':['🟡','Glutamate de monoammonium','caution','Même prudence que E621.'],
+  'E625':['🟡','Glutamate de magnésium','caution','Même prudence que E621.'],
+  'E626':['🟡','Acide guanylique','caution','Exhausteur de goût. Déconseillé aux goutteux (augmente l\'acide urique).'],
+  'E627':['🟡','Guanylate de sodium','caution','Déconseillé aux personnes souffrant de goutte.'],
+  'E628':['🟡','Guanylate de potassium','caution','Même précaution goutte.'],
+  'E629':['🟡','Guanylate de calcium','caution','Même précaution goutte.'],
+  'E630':['🟡','Acide inosinique','caution','Exhausteur. Déconseillé aux goutteux.'],
+  'E631':['🟡','Inosinate de sodium','caution','Même précaution que E630.'],
+  'E632':['🟡','Inosinate de potassium','caution','Même précaution.'],
+  'E633':['🟡','Inosinate de calcium','caution','Même précaution.'],
+  'E634':['🟡','Ribonucléotides 5\' de calcium','caution','Exhausteur combiné. Déconseillé aux goutteux.'],
+  'E635':['🟡','Ribonucléotides 5\' de sodium','caution','Exhausteur combiné. Déconseillé aux goutteux.'],
+  'E640':['🟢','Glycine et sel de sodium','ok','Exhausteur. Acide aminé naturel. Sûr.'],
+  'E641':['🟢','L-leucine','ok','Acide aminé essentiel naturel. Sûr.'],
+  /* ════════ ÉDULCORANTS ════════ */
+  'E950':['🟡','Acésulfame K','caution','Édulcorant intense synthétique. Certaines études suggèrent effets sur microbiote.'],
+  'E951':['🟡','Aspartame','caution','Édulcorant. Déconseillé aux phénylcétonuriques. CIRC 2023 : possible cancérogène (groupe 2B).'],
+  'E952':['🟡','Cyclamate','caution','Édulcorant. Interdit aux USA. Possible cancérogène suspecté.'],
+  'E953':['🟡','Isomalt','caution','Édulcorant. Effet laxatif à forte dose.'],
+  'E954':['🟡','Saccharine','caution','Édulcorant synthétique. Anciennement suspect cancérogène, réévalué. Arrière-goût amer.'],
+  'E955':['🟡','Sucralose','caution','Édulcorant synthétique. Peut altérer le microbiote intestinal.'],
+  'E956':['🟢','Alitame','ok','Édulcorant. Peu utilisé. Sûr aux doses autorisées.'],
+  'E957':['🟢','Thaumatine','ok','Édulcorant naturel (fruit d\'Afrique). Très puissant. Sûr.'],
+  'E958':['🟡','Glycyrrhizine','caution','Édulcorant naturel (réglisse). Hypertension artérielle à forte dose.'],
+  'E959':['🟢','Néohespéridine DC','ok','Édulcorant (agrumes). Sûr aux doses autorisées.'],
+  'E960':['🟢','Glycosides de stéviol (stévia)','ok','Édulcorant naturel (plante stévia). Bien toléré.'],
+  'E961':['🟡','Néotame','caution','Édulcorant synthétique (dérivé aspartame). Même précaution que E951.'],
+  'E962':['🟡','Sel d\'aspartame-acésulfame','caution','Édulcorant. Contient aspartame. Même précaution phénylcétonurie.'],
+  'E963':['🟡','Tagatose','caution','Édulcorant naturel. Effet laxatif possible à forte dose.'],
+  'E964':['🟢','Sirop de polyglycitol','ok','Édulcorant. Effet laxatif possible à forte dose.'],
+  'E965':['🟡','Maltitol','caution','Édulcorant. Effet laxatif à forte dose. "Sans sucre" peut induire en erreur.'],
+  'E966':['🟡','Lactitol','caution','Édulcorant. Effet laxatif à forte dose.'],
+  'E967':['🟡','Xylitol','caution','Édulcorant. Toxique pour les chiens ! Effet laxatif à forte dose chez l\'humain.'],
+  'E968':['🟡','Érythritol','caution','Édulcorant. Généralement bien toléré. Récente étude 2023 sur risque cardiovasculaire à débattre.'],
+  /* ════════ AGENTS LEVANTS / ANTIAGGLOMÉRANTS ════════ */
+  'E500':['🟢','Carbonates de sodium (bicarbonate)','ok','Levant naturel. Bicarbonate de soude. Sûr.'],
+  'E501':['🟢','Carbonates de potassium','ok','Levant. Sûr.'],
+  'E503':['🟢','Carbonates d\'ammonium','ok','Levant. Sûr.'],
+  'E504':['🟢','Carbonates de magnésium','ok','Antiagglomérant. Apport magnésium. Sûr.'],
+  'E507':['🟢','Acide chlorhydrique','ok','Régulateur d\'acidité. Utilisé en très faibles quantités. Sûr.'],
+  'E508':['🟢','Chlorure de potassium','ok','Sel minéral. Substitut de sel. Sûr.'],
+  'E509':['🟢','Chlorure de calcium','ok','Affermissant (fromages). Apport calcique. Sûr.'],
+  'E511':['🟢','Chlorure de magnésium','ok','Coagulant (tofu). Apport magnésium. Sûr.'],
+  'E512':['🟢','Chlorure stanneux','ok','Antioxydant conserves. Sûr aux doses autorisées.'],
+  'E514':['🟢','Sulfates de sodium','ok','Régulateur. Sûr.'],
+  'E516':['🟢','Sulfate de calcium','ok','Affermissant naturel. Apport calcique. Sûr.'],
+  'E524':['🟢','Hydroxyde de sodium','ok','Régulateur d\'acidité. Sûr aux faibles doses alimentaires.'],
+  'E525':['🟢','Hydroxyde de potassium','ok','Régulateur. Sûr.'],
+  'E526':['🟢','Hydroxyde de calcium','ok','Affermissant naturel. Sûr.'],
+  'E527':['🟢','Hydroxyde d\'ammonium','ok','Régulateur. Sûr.'],
+  'E528':['🟢','Hydroxyde de magnésium','ok','Régulateur. Sûr.'],
+  'E530':['🟢','Oxyde de magnésium','ok','Antiagglomérant. Sûr.'],
+  'E535':['🟢','Ferrocyanure de sodium','ok','Antiagglomérant sel. Doses très faibles. Sûr.'],
+  'E536':['🟢','Ferrocyanure de potassium','ok','Antiagglomérant sel. Sûr.'],
+  'E538':['🟢','Ferrocyanure de calcium','ok','Antiagglomérant. Sûr.'],
+  'E541':['🟡','Phosphate d\'aluminium sodique','caution','Levant. Apport d\'aluminium. Prudence — accumulation neurologique possible.'],
+  'E551':['🟢','Dioxyde de silicium','ok','Antiagglomérant. Silice naturelle. Sûr.'],
+  'E552':['🟢','Silicate de calcium','ok','Antiagglomérant. Sûr.'],
+  'E553a':['🟢','Silicates de magnésium','ok','Antiagglomérant. Sûr.'],
+  'E553b':['🟢','Talc','ok','Antiagglomérant. Sûr aux doses alimentaires (différent du talc inhalé).'],
+  'E554':['🟢','Silicate d\'aluminium sodique','ok','Antiagglomérant. Sûr.'],
+  'E555':['🟢','Silicate d\'aluminium potassique','ok','Antiagglomérant. Sûr.'],
+  'E556':['🟢','Silicate d\'aluminium calcique','ok','Antiagglomérant. Sûr.'],
+  'E558':['🟢','Bentonite','ok','Antiagglomérant naturel (argile). Sûr.'],
+  'E559':['🟢','Silicate d\'aluminium (kaolin)','ok','Antiagglomérant naturel. Sûr.'],
+  'E570':['🟢','Acides gras','ok','Antiagglomérant naturel. Sûr.'],
+  'E574':['🟢','Acide gluconique','ok','Régulateur d\'acidité. Naturel. Sûr.'],
+  'E575':['🟢','Glucono-delta-lactone','ok','Régulateur naturel. Sûr.'],
+  'E576':['🟢','Gluconate de sodium','ok','Séquestrant. Sûr.'],
+  'E577':['🟢','Gluconate de potassium','ok','Séquestrant. Sûr.'],
+  'E578':['🟢','Gluconate de calcium','ok','Affermissant. Apport calcique. Sûr.'],
+  'E579':['🟢','Gluconate ferreux','ok','Colorant (olives noires). Apport de fer. Sûr.'],
+  'E585':['🟢','Lactate ferreux','ok','Colorant. Apport de fer. Sûr.'],
+  /* ════════ AMIDONS MODIFIÉS ════════ */
+  'E1400':['🟢','Dextrine (amidon torréfié)','ok','Épaississant. Sûr.'],
+  'E1401':['🟢','Amidon traité à l\'acide','ok','Épaississant. Sûr.'],
+  'E1402':['🟢','Amidon traité aux alcalis','ok','Épaississant. Sûr.'],
+  'E1403':['🟢','Amidon blanchi','ok','Épaississant. Sûr.'],
+  'E1404':['🟢','Amidon oxydé','ok','Épaississant. Sûr.'],
+  'E1405':['🟢','Amidons traités aux enzymes','ok','Épaississant. Sûr.'],
+  'E1410':['🟢','Phosphate d\'amidon','ok','Épaississant. Sûr.'],
+  'E1412':['🟢','Phosphate de diamidon','ok','Épaississant. Sûr.'],
+  'E1413':['🟢','Phosphate de diamidon phosphaté','ok','Épaississant. Sûr.'],
+  'E1414':['🟢','Phosphate de diamidon acétylé','ok','Épaississant. Sûr.'],
+  'E1420':['🟢','Acétate d\'amidon','ok','Épaississant. Sûr.'],
+  'E1422':['🟡','Adipate de diamidon acétylé','caution','Épaississant ultra-transformé. Généralement sûr mais signale un produit très industriel.'],
+  'E1440':['🟢','Amidon hydroxypropylé','ok','Épaississant. Sûr.'],
+  'E1442':['🟢','Phosphate de diamidon hydroxypropylé','ok','Épaississant. Sûr.'],
+  'E1450':['🟢','Octényle succinate d\'amidon sodique','ok','Émulsifiant. Sûr.'],
+  'E1451':['🟢','Amidon oxydé acétylé','ok','Épaississant. Sûr.'],
+  'E1452':['🟢','Octényle succinate d\'amidon aluminium','ok','Épaississant encapsulant. Sûr.'],
+  /* ════════ DIVERS ════════ */
+  'E900':['🟢','Polydiméthylsiloxane','ok','Antimoussant. Sûr aux doses autorisées.'],
+  'E901':['🟢','Cire d\'abeille','ok','Agent d\'enrobage naturel. Sûr.'],
+  'E902':['🟢','Cire de candelilla','ok','Agent d\'enrobage végétal. Sûr.'],
+  'E903':['🟢','Cire de carnauba','ok','Agent d\'enrobage végétal (palmier). Sûr.'],
+  'E904':['🟢','Gomme-laque','ok','Agent d\'enrobage (insecte). Sûr.'],
+  'E905':['🟡','Paraffines cristallines','caution','Agent d\'enrobage minéral (pétrole). Prudence, peut s\'accumuler.'],
+  'E907':['🟢','Poly-1-décène hydrogéné','ok','Agent de démoulage. Sûr.'],
+  'E912':['🟢','Esters de l\'acide montanique','ok','Agent d\'enrobage. Sûr.'],
+  'E914':['🟢','Cire de polyéthylène oxydée','ok','Agent d\'enrobage. Sûr.'],
+  'E920':['🟢','L-cystéine','ok','Agent de traitement farine. Acide aminé naturel. Sûr.'],
+  'E927b':['🟢','Urée','ok','Agent de traitement farine. Naturel. Sûr.'],
+  'E938':['🟢','Argon','ok','Gaz d\'emballage naturel. Inerte. Sûr.'],
+  'E939':['🟢','Hélium','ok','Gaz propulseur. Inerte. Sûr.'],
+  'E941':['🟢','Azote','ok','Gaz d\'emballage naturel. Inerte. Sûr.'],
+  'E942':['🟢','Protoxyde d\'azote','ok','Gaz propulseur (chantilly). Sûr.'],
+  'E943a':['🟢','Butane','ok','Gaz propulseur. Sûr aux doses infimes.'],
+  'E943b':['🟢','Isobutane','ok','Gaz propulseur. Sûr.'],
+  'E944':['🟢','Propane','ok','Gaz propulseur. Sûr.'],
+  'E948':['🟢','Oxygène','ok','Gaz d\'emballage. Naturel. Sûr.'],
+  'E949':['🟢','Hydrogène','ok','Gaz d\'emballage. Naturel. Sûr.'],
+  'E950':['🟡','Acésulfame K','caution','Édulcorant synthétique. Effets possibles sur microbiote.'],
+  'E999':['🟡','Extrait de quillaia','caution','Moussant. Peu étudié, à surveiller.'],
+  'E1105':['🟢','Lysozyme','ok','Conservateur naturel (blanc d\'œuf). Antibactérien naturel. Sûr.'],
+  'E1200':['🟢','Polydextrose','ok','Édulcorant/fibre soluble. Prébiotique. Sûr.'],
+  'E1201':['🟢','Polyvinylpyrrolidone','ok','Agent de clarification. Sûr.'],
+  'E1202':['🟢','Polyvinylpolypyrrolidone','ok','Agent de clarification. Sûr.'],
+  'E1203':['🟡','Alcool polyvinylique','caution','Enrobage comprimés. Peu étudié en alimentation.'],
+  'E1204':['🟢','Pullulane','ok','Agent d\'enrobage. Naturel (fermentation). Sûr.'],
+  'E1404':['🟢','Amidon oxydé','ok','Épaississant. Sûr.'],
+};
+
+/* ─── OPEN FOOD FACTS ────────────────────────────────── */
+async function fetchFood(barcode) {
+  setStatus('', '');
+  showLoader(true);
+  document.getElementById('pills-books').style.display = 'none';
+  document.getElementById('pills-food').style.display  = 'flex';
+  document.getElementById('loaderTxt').textContent     = 'Recherche Open Food Facts…';
+  document.getElementById('pill-off').className        = 'src-pill active';
+
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+    const d = await r.json();
+
+    document.getElementById('pill-off').className = 'src-pill ' + (d.status === 1 ? 'found' : 'done');
+    showLoader(false);
+
+    if (d.status !== 1 || !d.product) {
+      showError(`Produit non trouvé (${barcode}).\nEssayez sur world.openfoodfacts.org`);
+      return;
+    }
+
+    const p = d.product;
+    const name       = p.product_name_fr || p.product_name || p.abbreviated_product_name || 'Produit inconnu';
+    const brand      = p.brands || '';
+    const quantity   = p.quantity || '';
+    const nutriscore = p.nutriscore_grade ? p.nutriscore_grade.toUpperCase() : '';
+    const ecoscore   = p.ecoscore_grade   ? p.ecoscore_grade.toUpperCase()   : '';
+    const categories = p.categories_tags_fr || p.categories || '';
+    const ingredients= p.ingredients_text_fr || p.ingredients_text || '';
+    const cover      = p.image_front_url || p.image_url || '';
+
+    // Additifs : extraire les codes E depuis additives_tags
+    const addTags = (p.additives_tags || []).map(t => t.replace('en:','').toUpperCase());
+
+    // Valeurs nutritionnelles
+    let summary = '';
+    if (ingredients) summary += '🧪 Ingrédients :\n' + ingredients + '\n\n';
+    const n = p.nutriments || {};
+    const per = p.nutrition_data_per || '100g';
+    if (n['energy-kcal_100g'] !== undefined || n['energy-kcal'] !== undefined) {
+      summary += `📊 Pour ${per} :\n`;
+      if (n['energy-kcal_100g'] !== undefined) summary += `Énergie : ${n['energy-kcal_100g']} kcal\n`;
+      if (n['fat_100g']            !== undefined) summary += `Lipides : ${n['fat_100g']} g\n`;
+      if (n['saturated-fat_100g'] !== undefined) summary += `  dont saturés : ${n['saturated-fat_100g']} g\n`;
+      if (n['carbohydrates_100g'] !== undefined) summary += `Glucides : ${n['carbohydrates_100g']} g\n`;
+      if (n['sugars_100g']        !== undefined) summary += `  dont sucres : ${n['sugars_100g']} g\n`;
+      if (n['fiber_100g']         !== undefined) summary += `Fibres : ${n['fiber_100g']} g\n`;
+      if (n['proteins_100g']      !== undefined) summary += `Protéines : ${n['proteins_100g']} g\n`;
+      if (n['salt_100g']          !== undefined) summary += `Sel : ${n['salt_100g']} g\n`;
+    }
+    if (p.labels) summary += `\n🏷 Labels : ${p.labels}`;
+
+    showResult({
+      title:     name,
+      author:    brand + (quantity ? ' · ' + quantity : ''),
+      publisher: (categories+'').split(',')[0] || '',
+      year: '', pages: '',
+      summary:   summary.trim(),
+      cover, isbn: barcode,
+      source: 'Open Food Facts', sourceAll: ['Open Food Facts'],
+      isFood: true,
+      nutriscore, ecoscore, addTags
+    });
+
+  } catch(e) {
+    document.getElementById('pill-off').className = 'src-pill done';
+    showLoader(false);
+    showError('Erreur réseau — réessayez.');
+  }
+}
+
+function stopScan() {
+  scanning = false;
+  clearTimeout(scanTimer);
+  stopTimer();
+  document.getElementById('led').classList.remove('on');
+  document.getElementById('btnCancel').style.display = 'none';
+  document.getElementById('beam').classList.add('paused');
+  if (quaggaLive) {
+    try { Quagga.offDetected(onDetected); Quagga.stop(); } catch(e){}
+    quaggaLive = false;
+  }
+  setTimeout(() => { document.getElementById('vwrap').style.display = 'none'; }, 250);
+}
+
+function cancelScan() {
+  stopScan();
+  resetScanner();
+}
+
+/* ─── ISBN DISPLAY ───────────────────────────────────── */
+function setISBN(isbn) {
+  currentISBN = isbn;
+  const el = document.getElementById('isbnVal');
+  el.textContent = isbn;
+  el.classList.remove('empty');
+}
+
+function clearISBN() {
+  currentISBN = '';
+  const el = document.getElementById('isbnVal');
+  el.textContent = '— — — — — — — — — — — — —';
+  el.classList.add('empty');
+}
+
+/* ─── API PARALLÈLE — 3 SOURCES ─────────────────────── */
+
+/* Scoring : plus un résultat est complet, plus son score est élevé */
+function scoreBook(b) {
+  if (!b) return -1;
+  let s = 0;
+  if (b.title   && b.title   !== 'Titre inconnu')   s += 2;
+  if (b.author  && b.author  !== 'Auteur inconnu')  s += 2;
+  if (b.summary && b.summary.length > 40)           s += 4;
+  if (b.cover)                                       s += 3;
+  if (b.publisher)                                   s += 1;
+  if (b.year)                                        s += 1;
+  if (b.pages)                                       s += 1;
+  return s;
+}
+
+/* Fusionne le meilleur de plusieurs résultats */
+function mergeBooks(results) {
+  // Trier par score décroissant
+  const sorted = results
+    .filter(Boolean)
+    .sort((a, b) => scoreBook(b) - scoreBook(a));
+  if (!sorted.length) return null;
+
+  const best = { ...sorted[0] };
+
+  // Combler les trous avec les sources suivantes
+  for (const r of sorted.slice(1)) {
+    if (!best.summary && r.summary) best.summary = r.summary;
+    if (!best.cover   && r.cover)   best.cover   = r.cover;
+    if (!best.publisher && r.publisher) best.publisher = r.publisher;
+    if (!best.year    && r.year)    best.year    = r.year;
+    if (!best.pages   && r.pages)   best.pages   = r.pages;
+  }
+
+  // Indiquer toutes les sources ayant répondu
+  const sources = [...new Set(sorted.map(r => r.source))];
+  best.sourceAll = sources;
+  best.source    = sorted[0].source;
+
+  // Couverture garantie : URL Open Library directe par ISBN (CDN public, toujours dispo)
+  if (!best.cover && best.isbn) {
+    best.cover = 'https://covers.openlibrary.org/b/isbn/' + best.isbn + '-L.jpg';
+  }
+
+  return best;
+}
+
+/* Indicateur visuel par pill */
+function pillState(id, state) {
+  const el = document.getElementById('pill-' + id);
+  if (!el) return;
+  el.className = 'src-pill ' + state;
+}
+
+async function fetchBook(isbn) {
+  setStatus('', '');
+  showLoader(true);
+  document.getElementById('pills-books').style.display = 'flex';
+  document.getElementById('pills-food').style.display  = 'none';
+  document.getElementById('loaderTxt').textContent     = 'Consultation de 4 sources en parallèle…';
+
+  // Activer toutes les pills
+  pillState('google', 'active');
+  pillState('open',   'active');
+  pillState('inv',    'active');
+  pillState('bnf',    'active');
+
+  const results = await Promise.allSettled([
+    fetchGoogle(isbn).then(r => { pillState('google', r ? 'found' : 'done'); return r; })
+                     .catch(() => { pillState('google','done'); return null; }),
+    fetchOpenLib(isbn).then(r => { pillState('open', r ? 'found' : 'done'); return r; })
+                      .catch(() => { pillState('open','done'); return null; }),
+    fetchInventaire(isbn).then(r => { pillState('inv', r ? 'found' : 'done'); return r; })
+                         .catch(() => { pillState('inv','done'); return null; }),
+    fetchBnf(isbn).then(r => { pillState('bnf', r ? 'found' : 'done'); return r; })
+                  .catch(() => { pillState('bnf','done'); return null; })
+  ]);
+
+  const books   = results.map(r => r.status === 'fulfilled' ? r.value : null);
+  const merged  = mergeBooks(books.filter(Boolean));
+
+  showLoader(false);
+
+  if (merged) {
+    currentBook = merged;
+    showResult(merged);
+  } else {
+    showError(`Aucun livre trouvé pour l'ISBN ${isbn}.\nVérifiez que c'est bien un code-barres de livre (ISBN-13 ou ISBN-10).`);
+  }
+}
+
+/* ── Google Books ───────────────────────────────────── */
+async function fetchGoogle(isbn) {
+  const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (!d.items?.length) return null;
+  const v = d.items[0].volumeInfo;
+  return {
+    title:     v.title || 'Titre inconnu',
+    author:    (v.authors || ['Auteur inconnu']).join(', '),
+    publisher: v.publisher || '',
+    year:      v.publishedDate?.substring(0,4) || '',
+    pages:     v.pageCount || '',
+    lang:      v.language || '',
+    summary:   v.description || '',
+    cover:     (v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail || '').replace('http:','https:'),
+    isbn,
+    source: 'Google Books'
+  };
+}
+
+/* ── Open Library ───────────────────────────────────── */
+async function fetchOpenLib(isbn) {
+  const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const info = d[`ISBN:${isbn}`];
+  if (!info) return null;
+  const cover   = info.cover?.large || info.cover?.medium || info.cover?.small || '';
+  const summary = typeof info.notes === 'string' ? info.notes
+                : info.notes?.value || info.excerpts?.[0]?.text || '';
+  return {
+    title:     info.title || 'Titre inconnu',
+    author:    (info.authors||[]).map(a=>a.name).join(', ') || 'Auteur inconnu',
+    publisher: (info.publishers||[]).map(p=>p.name).join(', '),
+    year:      info.publish_date?.match(/\d{4}/)?.[0] || '',
+    pages:     info.number_of_pages || '',
+    lang:      '',
+    summary,
+    cover,
+    isbn,
+    source: 'Open Library'
+  };
+}
+
+/* ── Inventaire.io (excellent livres FR/CH) ─────────── */
+async function fetchInventaire(isbn) {
+  const r = await fetch(`https://inventaire.io/api/entities?action=by-uris&uris=isbn:${isbn}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const entity = d.entities?.[`isbn:${isbn}`];
+  if (!entity) return null;
+
+  /* Titre : préférer FR puis EN */
+  const labels = entity.labels || {};
+  const title  = labels.fr || labels.en || Object.values(labels)[0] || 'Titre inconnu';
+
+  /* Description */
+  const descs  = entity.descriptions || {};
+  const summary = descs.fr || descs.en || Object.values(descs)[0] || '';
+
+  /* Couverture */
+  const cover = entity.image?.url
+    ? (entity.image.url.startsWith('http') ? entity.image.url
+      : `https://inventaire.io${entity.image.url}`)
+    : '';
+
+  /* Claims Wikidata */
+  const claims = entity.claims || {};
+
+  /* Année : wdt:P577 (date de publication) */
+  let year = '';
+  const dateVal = claims['wdt:P577']?.[0];
+  if (dateVal) year = String(dateVal).substring(0,4);
+
+  /* Editeur : wdt:P123 — URIs Wikidata, on prend juste l'URI pour l'instant */
+  const pubUri  = claims['wdt:P123']?.[0] || '';
+
+  /* Pages : wdt:P1104 */
+  const pages = claims['wdt:P1104']?.[0] || '';
+
+  /* Auteurs : wdt:P50 → URIs, résolution en parallèle (max 2) */
+  const authorUris = (claims['wdt:P50'] || []).slice(0, 2);
+  let author = 'Auteur inconnu';
+  if (authorUris.length) {
+    try {
+      const urisParam = authorUris.join('|');
+      const ar = await fetch(`https://inventaire.io/api/entities?action=by-uris&uris=${encodeURIComponent(urisParam)}`);
+      if (ar.ok) {
+        const ad = await ar.json();
+        const names = authorUris.map(u => {
+          const e = ad.entities?.[u];
+          if (!e) return null;
+          const l = e.labels || {};
+          return l.fr || l.en || Object.values(l)[0] || null;
+        }).filter(Boolean);
+        if (names.length) author = names.join(', ');
+      }
+    } catch(e) { /* auteur restera inconnu */ }
+  }
+
+  if (!title || title === 'Titre inconnu') return null;
+
+  return { title, author, publisher: pubUri ? '—' : '', year, pages, lang: 'fr', summary, cover, isbn, source: 'Inventaire.io' };
+}
+
+/* ── BnF — Bibliothèque nationale de France ─────────── */
+async function fetchBnf(isbn) {
+  const url = `https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve`
+            + `&query=bib.isbn+adj+"${isbn}"&recordSchema=dublincore&maximumRecords=1`;
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const txt = await r.text();
+
+  /* Parser le XML Dublin Core retourné par la BnF */
+  const parser = new DOMParser();
+  const xml    = parser.parseFromString(txt, 'application/xml');
+
+  /* Vérifier qu'il y a au moins un record */
+  const records = xml.getElementsByTagNameNS('*', 'record');
+  if (!records.length) return null;
+
+  /* Helper : premier élément d'un tag DC */
+  const dc = (tag) => {
+    const els = xml.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag);
+    return els.length ? els[0].textContent.trim() : '';
+  };
+  /* Tous les éléments d'un tag DC */
+  const dcAll = (tag) => {
+    const els = xml.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag);
+    return Array.from(els).map(e => e.textContent.trim()).filter(Boolean);
+  };
+
+  const title = dc('title');
+  if (!title) return null;
+
+  /* Auteurs : dc:creator peut contenir "NOM, Prénom (1950-)" → nettoyer */
+  const creators = dcAll('creator').map(c => c.replace(/\s*\(\d{4}[-–]\d*\)\s*$/, '').trim());
+  const author   = creators.join(', ') || 'Auteur inconnu';
+
+  /* Éditeur : dc:publisher souvent "Ville : Éditeur" */
+  const pubRaw   = dc('publisher');
+  const publisher = pubRaw.includes(':') ? pubRaw.split(':').slice(1).join(':').trim() : pubRaw;
+
+  /* Année : dc:date */
+  const dateRaw = dc('date');
+  const year    = dateRaw.match(/\d{4}/)?.[0] || '';
+
+  /* Description / résumé */
+  const summary = dcAll('description').find(d => d.length > 30) || '';
+
+  /* Langue */
+  const lang = dc('language') || 'fr';
+
+  /* Pas de couverture via SRU, mais on peut tenter BnF Gallica */
+  /* Format : https://gallica.bnf.fr/ark:/12148/... → trop complexe à résoudre ici */
+  const cover = '';
+
+  return { title, author, publisher, year, pages: '', lang, summary, cover, isbn, source: 'BnF' };
+}
+
+/* ─── UI STATES ──────────────────────────────────────── */
+function showLoader(on) {
+  document.getElementById('loader').style.display   = on ? 'flex' : 'none';
+  document.getElementById('result').style.display   = 'none';
+  document.getElementById('errcard').style.display  = 'none';
+  document.getElementById('idle').style.display     = 'none';
+  if (!on) document.getElementById('btnStart').style.display = 'block';
+}
+
+function showResult(b) {
+  showLoader(false);
+
+  document.getElementById('rTitle').textContent  = b.title;
+  document.getElementById('rAuthor').textContent = b.author;
+
+  const parts = [];
+  if (b.year) parts.push(b.year);
+  if (b.pages) parts.push(b.pages + ' p.');
+  if (b.publisher) parts.push(b.publisher);
+  document.getElementById('rMeta').textContent = parts.join(' · ');
+
+  // Nutri-Score visuel + Éco-Score
+  const nutriWrap = document.getElementById('rNutriWrap');
+  const addWrap   = document.getElementById('rAdditivesWrap');
+  if (b.isFood) {
+    // Nutri-Score barres
+    const grades = ['A','B','C','D','E'];
+    const ns = b.nutriscore || '';
+    document.getElementById('rNutriScore').innerHTML = grades.map(g =>
+      `<div class="nutri-box nutri-${g}${ns===g?' active':''}">${g}</div>`
+    ).join('');
+    // Éco-Score badge
+    const es = b.ecoscore || '';
+    document.getElementById('rEcoBadge').innerHTML = es
+      ? `<span class="eco-badge eco-${es}">🌱 Éco ${es}</span>`
+      : `<span class="eco-badge eco-unknown">🌱 Éco-Score inconnu</span>`;
+    nutriWrap.style.display = 'flex';
+
+    // Additifs
+    const tags = b.addTags || [];
+    if (tags.length) {
+      const rows = tags.map(code => {
+        const info = ADDITIVES[code];
+        if (info) {
+          return `<div class="additive-row ${info[2]}">
+            <div class="additive-icon">${info[0]}</div>
+            <div><div class="additive-name">${code} — ${info[1]}</div>
+            <div class="additive-desc">${info[3]}</div></div>
+          </div>`;
+        }
+        // Code inconnu dans notre base → affiché neutre
+        return `<div class="additive-row ok">
+          <div class="additive-icon">⚪</div>
+          <div><div class="additive-name">${code}</div>
+          <div class="additive-desc">Additif présent — non classifié dans notre base.</div></div>
+        </div>`;
+      }).join('');
+      document.getElementById('rAdditivesList').innerHTML = rows;
+      addWrap.style.display = 'block';
+    } else {
+      addWrap.style.display = 'none';
+    }
+  } else {
+    nutriWrap.style.display = 'none';
+    addWrap.style.display   = 'none';
+  }
+
+  document.getElementById('rSummaryLabel').textContent = b.isFood ? 'Composition & Nutrition' : 'Résumé';
+
+  const srcTxt = document.getElementById('rSrcTxt');
+  if (b.sourceAll && b.sourceAll.length > 1) {
+    srcTxt.textContent = b.source + ' +' + (b.sourceAll.length - 1);
+    document.getElementById('rSrc').title = 'Sources : ' + b.sourceAll.join(', ');
+  } else {
+    srcTxt.textContent = b.source;
+  }
+
+  const img = document.getElementById('rCover');
+  const ph  = document.getElementById('rCoverPh');
+  img.onerror = function() { img.style.display='none'; ph.style.display='flex'; };
+  if (b.cover) {
+    img.src = b.cover;
+    img.style.display = 'block';
+    ph.style.display  = 'none';
+  } else {
+    img.style.display = 'none';
+    ph.style.display  = 'flex';
+  }
+
+  document.getElementById('rSummary').textContent =
+    b.summary || (b.isFood ? 'Aucune information nutritionnelle disponible.' : 'Aucun résumé disponible pour ce livre.');
+  document.querySelector('.r-summary-wrap').style.display = 'block';
+
+  document.getElementById('result').style.display   = 'block';
+  document.getElementById('btnStart').style.display = 'block';
+}
+
+function showError(msg) {
+  document.getElementById('errTxt').textContent     = msg.replace(/\\n/g,'\n');
+  document.getElementById('errcard').style.display  = 'block';
+  document.getElementById('idle').style.display     = 'none';
+  document.getElementById('btnStart').style.display = 'block';
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className   = 'status ' + (cls || 'muted');
+}
+
+/* ─── TOAST ──────────────────────────────────────────── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ─── RESET ──────────────────────────────────────────── */
+function resetUI() {
+  document.getElementById('result').style.display  = 'none';
+  document.getElementById('errcard').style.display = 'none';
+  document.getElementById('loader').style.display  = 'none';
+  document.getElementById('beam').classList.remove('paused');
+  document.getElementById('tprog').style.stroke = 'var(--accent)';
+  currentBook = null;
+}
+
+function resetScanner() {
+  resetUI();
+  clearISBN();
+  document.getElementById('pills-books').style.display = 'flex';
+  document.getElementById('pills-food').style.display  = 'none';
+  document.getElementById('manualISBN').value    = '';
+  document.getElementById('vwrap').style.display     = 'none';
+  document.getElementById('idle').style.display      = 'flex';
+  document.getElementById('btnStart').style.display  = 'block';
+  document.getElementById('btnCancel').style.display = 'none';
+  setStatus('Pointez la caméra vers le code-barres ISBN du livre', 'muted');
+}
+
+/* ─── SAISIE MANUELLE ────────────────────────────────── */
+function searchManual() {
+  const raw = document.getElementById('manualISBN').value.replace(/[\s\-]/g, '');
+  if (!raw) { showToast('⚠️ Saisissez un ISBN'); return; }
+  if (raw.length < 8) { showToast('⚠️ Code trop court (min. 8 chiffres)'); return; }
+  if (raw.length > 13) { showToast('⚠️ ISBN trop long (max. 13 chiffres)'); return; }
+  if (!/^\d+$/.test(raw)) { showToast('⚠️ Chiffres uniquement'); return; }
+
+  resetUI();
+  setISBN(raw);
+  document.getElementById('idle').style.display = 'none';
+  if (raw.startsWith('978') || raw.startsWith('979') || raw.length === 10) {
+    fetchBook(raw);
+  } else {
+    fetchFood(raw);
+  }
+}
+
+/* ─── INIT ───────────────────────────────────────────── */
+resetScanner();
+</script>
+</body>
+</html>
