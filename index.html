@@ -1004,17 +1004,17 @@ function fetchT(url, ms) {
     xhr.timeout = ms;
     xhr.onload = function() {
       var status = xhr.status;
-      var text   = xhr.responseText;
+      var text = xhr.responseText;
       resolve({
-        ok:     status >= 200 && status < 300,
+        ok: status >= 200 && status < 300,
         status: status,
-        json:   function() { try { return Promise.resolve(JSON.parse(text)); } catch(e) { return Promise.reject(e); } },
-        text:   function() { return Promise.resolve(text); }
+        json: function() { try { return Promise.resolve(JSON.parse(text)); } catch(e) { return Promise.reject(e); } },
+        text: function() { return Promise.resolve(text); }
       });
     };
     xhr.onerror   = function() { reject(new Error('network')); };
     xhr.ontimeout = function() { reject(new Error('timeout')); };
-    xhr.onabort   = function() { reject(new Error('abort'));   };
+    xhr.onabort   = function() { reject(new Error('abort')); };
     xhr.send();
   });
 }
@@ -1035,23 +1035,13 @@ async function _fetchProduct(barcode) {
   // 1. Open Food Facts — serveur mondial
   try {
     var r1 = await fetchT('https://world.openfoodfacts.org/api/v0/product/' + barcode + '.json'), d1 = await r1.json();
-    if (d1.status===1 && d1.product) {
-      pill('off','found'); pill('opf','done'); pill('upc','done'); pill('fda','done');
-      showLoader(false,true);
-      try { buildFoodResult(barcode, d1.product); } catch(ex) { showErr('Erreur affichage:\n' + ex.message); }
-      return;
-    }
+    if (d1.status===1 && d1.product) { pill('off','found'); pill('opf','done'); pill('upc','done'); pill('fda','done'); showLoader(false,true); try { buildFoodResult(barcode, d1.product); } catch(ex) { showErr('Erreur affichage:\n'+ex.message); } return; }
     pill('off','done');
   } catch(e) { pill('off','done'); }
   // 1b. Open Food Facts — serveur suisse (produits CH mieux couverts ici)
   try {
     var r1b = await fetchT('https://ch.openfoodfacts.org/api/v0/product/' + barcode + '.json'), d1b = await r1b.json();
-    if (d1b.status===1 && d1b.product) {
-      pill('off','found'); pill('opf','done'); pill('upc','done'); pill('fda','done');
-      showLoader(false,true);
-      try { buildFoodResult(barcode, d1b.product); } catch(ex) { showErr('Erreur affichage:\n' + ex.message); }
-      return;
-    }
+    if (d1b.status===1 && d1b.product) { pill('off','found'); pill('opf','done'); pill('upc','done'); pill('fda','done'); showLoader(false,true); try { buildFoodResult(barcode, d1b.product); } catch(ex) { showErr('Erreur affichage:\n'+ex.message); } return; }
   } catch(e) {}
   try {
     var r2 = await fetchT('https://world.openproductsfacts.org/api/v0/product/' + barcode + '.json'), d2 = await r2.json();
@@ -1861,6 +1851,8 @@ function printPrixEvo(barcode) {
 
 doReset();
 updateHistCount();
+// Marqueur version
+document.querySelector('.hd-s').textContent = 'v8 · Livres · Produits alimentaires';
 </script>
 </body>
 </html>
