@@ -998,11 +998,26 @@ var ALNAMES = { 'gluten':'Gluten','milk':'Lait','eggs':'\u0152ufs','nuts':'Fruit
 
 function fetchT(url, ms) {
   ms = ms || 6000;
-  var ctrl = new AbortController();
-  var tid  = setTimeout(function() { ctrl.abort(); }, ms);
-  return fetch(url, { signal: ctrl.signal })
-    .then(function(r) { clearTimeout(tid); return r; })
-    .catch(function(e) { clearTimeout(tid); throw e; });
+  return new Promise(function(resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = ms;
+    xhr.onload = function() {
+      // Simuler un objet Response comme fetch()
+      var status = xhr.status;
+      var text   = xhr.responseText;
+      resolve({
+        ok:     status >= 200 && status < 300,
+        status: status,
+        json:   function() { return Promise.resolve(JSON.parse(text)); },
+        text:   function() { return Promise.resolve(text); }
+      });
+    };
+    xhr.onerror   = function() { reject(new Error('network')); };
+    xhr.ontimeout = function() { reject(new Error('timeout')); };
+    xhr.onabort   = function() { reject(new Error('abort'));   };
+    xhr.send();
+  });
 }
 
 async function fetchProduct(barcode) {
